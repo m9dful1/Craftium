@@ -1,0 +1,74 @@
+[
+    {
+        "delay": 1378,
+        "key": "q",
+        "macKeyCode": 12,
+        "state": "down"
+    },
+    {
+        "delay": 105,
+        "key": "q",
+        "macKeyCode": 12,
+        "state": "up"
+    },
+    {
+        "delay": 275,
+        "key": "w",
+        "macKeyCode": 13,
+        "state": "down"
+    },
+    {
+        "delay": 103,
+        "key": "w",
+        "macKeyCode": 13,
+        "state": "up"
+    },
+    {
+        "delay": 158,
+        "key": "e",
+        "macKeyCode": 14,
+        "state": "down"
+    },
+    {
+        "delay": 120,
+        "key": "e",
+        "macKeyCode": 14,
+        "state": "up"
+    },
+    {
+        "delay": 195,
+        "key": "r",
+        "macKeyCode": 15,
+        "state": "down"
+    },
+    {
+        "delay": 130,
+        "key": "r",
+        "macKeyCode": 15,
+        "state": "up"
+    },
+    {
+        "delay": 191,
+        "key": "t",
+        "macKeyCode": 17,
+        "state": "down"
+    },
+    {
+        "delay": 117,
+        "key": "t",
+        "macKeyCode": 17,
+        "state": "up"
+    },
+    {
+        "delay": 410,
+        "key": "y",
+        "macKeyCode": 16,
+        "state": "down"
+    },
+    {
+        "delay": 113,
+        "key": "y",
+        "macKeyCode": 16,
+        "state": "up"
+    }
+]

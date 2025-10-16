@@ -1,0 +1,5 @@
+/Users/cthul/Documents/Projects/Button Press Recorder/build/CMakeFiles/Craftium.dir
+/Users/cthul/Documents/Projects/Button Press Recorder/build/CMakeFiles/edit_cache.dir
+/Users/cthul/Documents/Projects/Button Press Recorder/build/CMakeFiles/rebuild_cache.dir
+/Users/cthul/Documents/Projects/Button Press Recorder/build/CMakeFiles/Craftium_autogen_timestamp_deps.dir
+/Users/cthul/Documents/Projects/Button Press Recorder/build/CMakeFiles/Craftium_autogen.dir

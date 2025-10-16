@@ -1,0 +1,4 @@
+# Hashes of file build rules.
+c0a9711ad27a2be897fac83f20445df1 ButtonPressRecorder_autogen/timestamp
+5638cf65aac5459705774dff17f7cf72 CMakeFiles/Craftium_autogen
+1abce5879728e68e1a1a8e071da10e72 Craftium_autogen/timestamp

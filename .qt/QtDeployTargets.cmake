@@ -1,0 +1,2 @@
+set(__QT_DEPLOY_TARGET_ButtonPressRecorder_FILE /Users/cthul/Documents/Projects/Button Press Recorder/ButtonPressRecorder)
+set(__QT_DEPLOY_TARGET_ButtonPressRecorder_TYPE EXECUTABLE)
