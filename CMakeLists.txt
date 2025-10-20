@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Craftium LANGUAGES CXX)
+project(Craftium LANGUAGES CXX OBJCXX)
 
 # Export compile commands for linters/IDEs
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -21,13 +21,23 @@ set(CMAKE_AUTORCC ON)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Core Gui)
 
 # Define the executable
-add_executable(Craftium
+set(SOURCES
     src/main.cpp
     src/controllerapp.cpp
     src/playbackworker.cpp
     include/controllerapp.h
     include/playbackworker.h
 )
+
+# Add macOS-specific Objective-C++ helper on Apple platforms
+if(APPLE)
+    list(APPEND SOURCES
+        src/macos_window_helper.mm
+        include/macos_window_helper.h
+    )
+endif()
+
+add_executable(Craftium ${SOURCES})
 
 # Link against Qt libraries first
 target_link_libraries(Craftium PRIVATE
@@ -46,7 +56,11 @@ target_include_directories(Craftium PRIVATE
 if(WIN32)
     target_link_libraries(Craftium PRIVATE user32)
 elif(APPLE)
-    # We now only need CoreGraphics for CGEvent functions
-    target_link_libraries(Craftium PRIVATE "-framework CoreGraphics" "-framework Carbon")
-    message(STATUS "Linked with -framework CoreGraphics and -framework Carbon")
+    # Link required macOS frameworks
+    target_link_libraries(Craftium PRIVATE
+        "-framework CoreGraphics"
+        "-framework Carbon"
+        "-framework AppKit"
+    )
+    message(STATUS "Linked with -framework CoreGraphics, -framework Carbon, and -framework AppKit")
 endif() 

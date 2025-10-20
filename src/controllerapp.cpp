@@ -84,10 +84,13 @@ void initialize_string_to_vk_map() {
 
 } // end anonymous namespace
 
-// Static hook handle for Windows
+// Windows global hook state
+// Note: These are intentionally global for single-instance application use.
+// The Windows low-level keyboard hook callback requires a C-style function pointer,
+// which necessitates global state to access the ControllerApp instance.
+// These variables are properly initialized and cleaned up in start/stopGlobalKeyListener.
+// WARNING: Do not create multiple instances of ControllerApp with recording enabled.
 HHOOK keyboardHook = NULL;
-
-// Static pointer to ControllerApp instance for the hook callback
 static ControllerApp* g_appInstance = nullptr;
 
 // Windows keyboard hook callback
@@ -174,11 +177,14 @@ void ControllerApp::recordKeyEvent(DWORD vkCode, bool isPress) {
     event.key = vkCodeToString(vkCode);
     
     if (event.key != "Unknown") {
-        // Add to sequence
-        sequence.push_back(event);
-        qDebug() << "Recorded (Win):" << QString::fromStdString(event.key) 
+        // Add to sequence with mutex protection
+        {
+            QMutexLocker locker(&sequenceMutex);
+            sequence.push_back(event);
+        }
+        qDebug() << "Recorded (Win):" << QString::fromStdString(event.key)
                  << QString::fromStdString(event.state) << "delay:" << event.delay;
-        
+
         // Update sequence text if panel is visible
         if (sequencePanelVisible) {
             // Use invokeMethod to safely call from another thread
@@ -193,6 +199,7 @@ void ControllerApp::recordKeyEvent(DWORD vkCode, bool isPress) {
 #include <CoreGraphics/CoreGraphics.h>
 #include <ApplicationServices/ApplicationServices.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include "../include/macos_window_helper.h"  // For window level management
 
 // Define the key map for non-printable keys at file scope
 namespace { // Use anonymous namespace
@@ -312,10 +319,11 @@ ControllerApp::ControllerApp(QWidget *parent)
     connect(this, &ControllerApp::destroyed, playbackThread, &QThread::quit);
 
     // Connect signals/slots for playback control using modern syntax
-    connect(this, &ControllerApp::startPlaybackSignal, 
+    // Using playbackWorker as context ensures lambda executes on worker thread
+    connect(this, &ControllerApp::startPlaybackSignal, playbackWorker,
             [this](const std::vector<KeyEvent>& sequence) {
                 playbackWorker->doWork(sequence, repeatCountSpinner->value());
-            });
+            }, Qt::QueuedConnection);
     connect(this, &ControllerApp::stopPlaybackSignal, playbackWorker, &PlaybackWorker::stopWork, Qt::DirectConnection);
     connect(playbackWorker, &PlaybackWorker::finished, this, &ControllerApp::handlePlaybackFinished);
 
@@ -324,23 +332,24 @@ ControllerApp::ControllerApp(QWidget *parent)
 
 ControllerApp::~ControllerApp() {
     qDebug() << "ControllerApp destroyed";
-    
+
     // Stop recording if active
     if (recording) {
         stopRecording();
     }
-    
-    // Stop playback if active
-    if (playing) {
-        stopPlayback();
+
+    // Stop playback if active - call worker directly to avoid race condition
+    if (playing && playbackWorker) {
+        playbackWorker->stopWork();  // Stop the worker directly, not via signal
+        playing = false;
     }
-    
-    // Delete thread and worker
-    if (playbackThread) {
+
+    // Properly shut down the worker thread
+    if (playbackThread && playbackThread->isRunning()) {
         playbackThread->quit();
         playbackThread->wait();
     }
-    
+
 #ifdef __APPLE__
     // Clean up any active timers
     if (appSwitchCheckTimer) {
@@ -476,53 +485,62 @@ void ControllerApp::updateStatusLabel(const QString& message) {
 }
 
 void ControllerApp::clearSequence() {
-    sequence.clear();
+    {
+        QMutexLocker locker(&sequenceMutex);
+        sequence.clear();
+    }
     updateStatusLabel("Status: Sequence cleared");
     updateSequenceText();
 }
 
 void ControllerApp::saveSequence() {
-    if (sequence.empty()) {
-        QMessageBox::information(this, "Save Sequence", "No sequence to save.");
-        return;
+    // Make a copy of the sequence while holding the mutex
+    std::vector<KeyEvent> sequenceCopy;
+    {
+        QMutexLocker locker(&sequenceMutex);
+        if (sequence.empty()) {
+            QMessageBox::information(this, "Save Sequence", "No sequence to save.");
+            return;
+        }
+        sequenceCopy = sequence;
     }
 
     QString fileName = QFileDialog::getSaveFileName(this,
         "Save Sequence", "", "JSON Files (*.json);;All Files (*)");
-    
+
     if (fileName.isEmpty())
         return;
-    
+
     QFile file(fileName);
     if (!file.open(QIODevice::WriteOnly)) {
         QMessageBox::warning(this, "Save Sequence",
                             "Could not open file for writing: " + file.errorString());
         return;
     }
-    
+
     // Create JSON array to hold sequence data
     QJsonArray sequenceArray;
-    
-    for (const auto& event : sequence) {
+
+    for (const auto& event : sequenceCopy) {
         QJsonObject eventObject;
         eventObject["key"] = QString::fromStdString(event.key);
         eventObject["state"] = QString::fromStdString(event.state);
         eventObject["delay"] = static_cast<int>(event.delay);
-        
+
         // Add platform-specific key codes
 #ifdef _WIN32
         eventObject["winKeyCode"] = static_cast<int>(event.winKeyCode);
 #elif defined(__APPLE__)
         eventObject["macKeyCode"] = static_cast<int>(event.macKeyCode);
 #endif
-        
+
         sequenceArray.append(eventObject);
     }
-    
+
     QJsonDocument doc(sequenceArray);
     file.write(doc.toJson());
     file.close();
-    
+
     updateStatusLabel("Status: Sequence saved to " + fileName);
     updateSequenceText();
 }
@@ -560,30 +578,33 @@ void ControllerApp::loadSequence() {
     }
     
     // Clear current sequence and load new one
-    sequence.clear();
-    QJsonArray sequenceArray = doc.array();
-    
-    for (const QJsonValue &value : sequenceArray) {
-        if (!value.isObject())
-            continue;
-        
-        QJsonObject obj = value.toObject();
-        
-        KeyEvent event;
-        event.key = obj["key"].toString().toStdString();
-        event.state = obj["state"].toString().toStdString();
-        event.delay = obj["delay"].toInt();
-        
-        // Load platform-specific key codes
+    {
+        QMutexLocker locker(&sequenceMutex);
+        sequence.clear();
+        QJsonArray sequenceArray = doc.array();
+
+        for (const QJsonValue &value : sequenceArray) {
+            if (!value.isObject())
+                continue;
+
+            QJsonObject obj = value.toObject();
+
+            KeyEvent event;
+            event.key = obj["key"].toString().toStdString();
+            event.state = obj["state"].toString().toStdString();
+            event.delay = obj["delay"].toInt();
+
+            // Load platform-specific key codes
 #ifdef _WIN32
-        event.winKeyCode = static_cast<WORD>(obj["winKeyCode"].toInt());
+            event.winKeyCode = static_cast<WORD>(obj["winKeyCode"].toInt());
 #elif defined(__APPLE__)
-        event.macKeyCode = static_cast<CGKeyCode>(obj["macKeyCode"].toInt());
+            event.macKeyCode = static_cast<CGKeyCode>(obj["macKeyCode"].toInt());
 #endif
-        
-        sequence.push_back(event);
+
+            sequence.push_back(event);
+        }
     }
-    
+
     updateStatusLabel("Status: Sequence loaded from " + fileName);
     updateSequenceText();
 }
@@ -592,9 +613,12 @@ void ControllerApp::startRecording() {
     if (!recording && !playing) {
         // Clear focus from any controls before starting to record
         clearFocusFromControls();
-        
+
         recording = true;
-        sequence.clear();
+        {
+            QMutexLocker locker(&sequenceMutex);
+            sequence.clear();
+        }
         updateStatusLabel("Status: Recording started");
         
         // Reset the last event time
@@ -631,69 +655,90 @@ void ControllerApp::stopRecording() {
 }
 
 void ControllerApp::startPlayback(int repeatCount, bool external) {
-    if (!playing && !recording && !sequence.empty()) {
+    // Make a copy of the sequence while holding the mutex
+    std::vector<KeyEvent> sequenceCopy;
+    {
+        QMutexLocker locker(&sequenceMutex);
+        if (sequence.empty()) {
+            updateStatusLabel("Status: No sequence to play");
+            QMessageBox::information(this, "Playback Info", "No sequence recorded to play back.");
+            return;
+        }
+        sequenceCopy = sequence;
+    }
+
+    if (!playing && !recording) {
         playing = true;
-        
+
         if (external) {
             updateStatusLabel(QString("Status: Click in the target application..."));
 
 #ifdef __APPLE__
             // Get our own process information for first-time initialization
             if (gMyProcess.highLongOfPSN == 0 && gMyProcess.lowLongOfPSN == 0) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
                 GetCurrentProcess(&gMyProcess);
+#pragma clang diagnostic pop
             }
-            
+
             // Set up a flag to track if we're waiting for app switch
             gWaitingForApplicationSwitch = true;
-            
+
             // Get the current front process
             ProcessSerialNumber currentFrontProcess;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
             if (GetFrontProcess(&currentFrontProcess) == noErr) {
+#pragma clang diagnostic pop
                 // Initialize a timer to check for application switch
                 if (appSwitchCheckTimer) {
                     appSwitchCheckTimer->stop();
                     appSwitchCheckTimer->deleteLater();
                 }
-                
+
                 appSwitchCheckTimer = new QTimer(this);
                 appSwitchCheckTimer->setInterval(100);  // Check every 100ms
-                
-                connect(appSwitchCheckTimer, &QTimer::timeout, this, [this, repeatCount, currentFrontProcess]() {
+
+                connect(appSwitchCheckTimer, &QTimer::timeout, this, [this, repeatCount, sequenceCopy]() {
                     if (!gWaitingForApplicationSwitch) {
                         appSwitchCheckTimer->stop();
                         return;
                     }
-                    
+
                     // Get the current frontmost process
                     ProcessSerialNumber frontProcess;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
                     if (GetFrontProcess(&frontProcess) == noErr) {
                         // Check if the frontmost process has changed from our app
                         Boolean isSameProcess;
                         if (SameProcess(&frontProcess, &gMyProcess, &isSameProcess) == noErr && !isSameProcess) {
+#pragma clang diagnostic pop
                             // Different app is now in front - start playback
                             gWaitingForApplicationSwitch = false;
                             appSwitchCheckTimer->stop();
-                            
+
                             updateStatusLabel(QString("Status: Playback starting (%1 repeats)").arg(repeatCount));
-                            emit startPlaybackSignal(sequence);
+                            emit startPlaybackSignal(sequenceCopy);
                         }
                     }
                 });
-                
+
                 // Start the timer
                 appSwitchCheckTimer->start();
-                
+
                 // Set a timeout in case no app switch happens (30 seconds)
                 QTimer::singleShot(30000, this, [this]() {
                     if (gWaitingForApplicationSwitch) {
                         gWaitingForApplicationSwitch = false;
-                        
+
                         if (appSwitchCheckTimer) {
                             appSwitchCheckTimer->stop();
                             appSwitchCheckTimer->deleteLater();
                             appSwitchCheckTimer = nullptr;
                         }
-                        
+
                         // Cancel playback since no app switch happened
                         playing = false;
                         updateStatusLabel("Status: Playback cancelled - no app switch detected");
@@ -701,29 +746,26 @@ void ControllerApp::startPlayback(int repeatCount, bool external) {
                 });
             } else {
                 // Couldn't get front process, fall back to timer approach
-                QTimer::singleShot(2000, this, [this, repeatCount]() {
+                QTimer::singleShot(2000, this, [this, repeatCount, sequenceCopy]() {
                     updateStatusLabel(QString("Status: Playback starting (%1 repeats)").arg(repeatCount));
-                    emit startPlaybackSignal(sequence);
+                    emit startPlaybackSignal(sequenceCopy);
                 });
             }
 #else
             // For non-Mac platforms, use the timer approach as before
-            QTimer::singleShot(2000, this, [this, repeatCount]() {
+            QTimer::singleShot(2000, this, [this, repeatCount, sequenceCopy]() {
                 updateStatusLabel(QString("Status: Playback starting (%1 repeats)").arg(repeatCount));
-                emit startPlaybackSignal(sequence);
+                emit startPlaybackSignal(sequenceCopy);
             });
 #endif
         } else {
             // Normal playback without special focus handling
             updateStatusLabel(QString("Status: Playback starting (%1 repeats)").arg(repeatCount));
-            emit startPlaybackSignal(sequence);
+            emit startPlaybackSignal(sequenceCopy);
         }
     } else if (recording) {
         updateStatusLabel("Status: Cannot start playback during recording");
         QMessageBox::warning(this, "Playback Error", "Cannot start playback while recording is active.");
-    } else if (sequence.empty()) {
-        updateStatusLabel("Status: No sequence to play");
-        QMessageBox::information(this, "Playback Info", "No sequence recorded to play back.");
     } else if (playing) {
         updateStatusLabel("Status: Playback already running");
     }
@@ -1237,11 +1279,13 @@ void ControllerApp::recordKeyEvent(CGKeyCode keyCode, bool isPress) {
     event.key = this->keyCodeToString(event.macKeyCode);
 
     if (event.key != "Unknown") {
-        // Accessing 'sequence' might need protection (mutex) if playback can happen concurrently
-        // For now, assume recording and playback are mutually exclusive
-        sequence.push_back(event);
+        // Add to sequence with mutex protection
+        {
+            QMutexLocker locker(&sequenceMutex);
+            sequence.push_back(event);
+        }
         qDebug() << "Recorded:" << QString::fromStdString(event.key) << QString::fromStdString(event.state) << "delay:" << event.delay;
-        
+
         // Update sequence text if panel is visible
         if (sequencePanelVisible) {
             updateSequenceText();
@@ -1281,21 +1325,27 @@ void ControllerApp::toggleSequencePanel() {
 // Add updateSequenceText method to display sequence details
 void ControllerApp::updateSequenceText() {
     if (!sequenceTextEdit) return;
-    
-    if (sequence.empty()) {
-        sequenceTextEdit->setText("No sequence recorded.");
-        return;
+
+    // Make a copy of the sequence while holding the mutex
+    std::vector<KeyEvent> sequenceCopy;
+    {
+        QMutexLocker locker(&sequenceMutex);
+        if (sequence.empty()) {
+            sequenceTextEdit->setText("No sequence recorded.");
+            return;
+        }
+        sequenceCopy = sequence;
     }
-    
+
     QString text;
     long long totalTime = 0;
-    
-    for (size_t i = 0; i < sequence.size(); ++i) {
-        const KeyEvent& event = sequence[i];
+
+    for (size_t i = 0; i < sequenceCopy.size(); ++i) {
+        const KeyEvent& event = sequenceCopy[i];
         totalTime += event.delay;
-        
+
         QString line;
-        
+
         if (i == 0) {
             // First event
             line = QString("Wait %1ms\n").arg(event.delay);
@@ -1305,17 +1355,17 @@ void ControllerApp::updateSequenceText() {
                       .arg(QString::fromStdString(event.state))
                       .arg(event.delay);
         }
-        
+
         text.append(line);
     }
-    
+
     // Add summary information
     text.append(QString("\n--- Summary ---\n"));
-    text.append(QString("Total events: %1\n").arg(sequence.size()));
+    text.append(QString("Total events: %1\n").arg(sequenceCopy.size()));
     text.append(QString("Total time: %1ms (%2s)\n")
                    .arg(totalTime)
                    .arg(totalTime / 1000.0, 0, 'f', 2));
-    
+
     sequenceTextEdit->setText(text);
 }
 
@@ -1333,7 +1383,7 @@ void ControllerApp::clearFocusFromControls() {
 
 void ControllerApp::setAlwaysOnTop(bool enable) {
     Qt::WindowFlags flags = windowFlags();
-    
+
     if (enable) {
         // Add the StaysOnTopHint flag
         setWindowFlags(flags | Qt::WindowStaysOnTopHint);
@@ -1343,9 +1393,23 @@ void ControllerApp::setAlwaysOnTop(bool enable) {
         setWindowFlags(flags & ~Qt::WindowStaysOnTopHint);
         updateStatusLabel("Status: Window will behave normally");
     }
-    
+
     // The window needs to be shown again after changing flags
     show();
+
+#ifdef __APPLE__
+    // On macOS, use native window level API for maximum priority
+    // This ensures the window stays on top even over games in borderless windowed mode
+    WId windowId = winId();
+    if (windowId) {
+        setMacOSWindowLevel(reinterpret_cast<void*>(windowId), enable);
+        if (enable) {
+            qDebug() << "Set window to NSFloatingWindowLevel";
+        } else {
+            qDebug() << "Set window to NSNormalWindowLevel";
+        }
+    }
+#endif
 }
 
 void ControllerApp::toggleDarkMode(bool checked) {

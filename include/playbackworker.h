@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QThread>
 #include <vector>
+#include <atomic>
 #include "controllerapp.h" // For KeyEvent struct definition
 
 #ifdef _WIN32
@@ -28,7 +29,7 @@ signals:
 private:
     void emulate_key_press(const KeyEvent& event);
 
-    volatile bool m_running = false;
+    std::atomic<bool> m_running{false};
 };
 
 #endif // PLAYBACKWORKER_H 

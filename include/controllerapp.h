@@ -16,6 +16,7 @@
 #include <map>
 #include <chrono>
 #include <QSettings>
+#include <QMutex>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -104,6 +105,7 @@ private:
     bool recording;
     bool playing;
     std::vector<KeyEvent> sequence;
+    mutable QMutex sequenceMutex;  // Protects sequence vector from concurrent access
     std::chrono::high_resolution_clock::time_point lastEventTime;
 
     QThread* playbackThread = nullptr;
@@ -129,9 +131,6 @@ private:
 
     // For "Always on Top" feature
     bool alwaysOnTop;
-
-    // Recording
-    QTextEdit *recordingText;
 
 #if defined(__APPLE__)
     // void recordKeyEvent(CGKeyCode keyCode, bool isPress); // Moved to public
