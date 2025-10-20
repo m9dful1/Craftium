@@ -1,6 +1,7 @@
 # Craftium - Auto Crafter
 
-![Build Status](https://github.com/YOUR_USERNAME/Craftium/workflows/Build%20Craftium/badge.svg)
+![Build Status](https://github.com/m9dful1/Craftium/workflows/Build%20Craftium/badge.svg)
+![Continuous Build](https://github.com/m9dful1/Craftium/workflows/Continuous%20Build/badge.svg)
 
 Craftium is a powerful keyboard automation tool designed to record and replay keyboard sequences with precise timing. Perfect for automating repetitive tasks in games like Final Fantasy 14, applications, or any software that accepts keyboard input.
 
@@ -17,10 +18,10 @@ Craftium is a powerful keyboard automation tool designed to record and replay ke
 ## Download
 
 ### Latest Build
-Download the latest automated build from the [Continuous Release](https://github.com/YOUR_USERNAME/Craftium/releases/tag/continuous) page.
+Download the latest automated build from the [Continuous Release](https://github.com/m9dful1/Craftium/releases/tag/continuous) page.
 
 ### Stable Releases
-For stable, tested releases, visit the [Releases](https://github.com/YOUR_USERNAME/Craftium/releases) page.
+For stable, tested releases, visit the [Releases](https://github.com/m9dful1/Craftium/releases) page.
 
 ## Installation
 
@@ -69,7 +70,7 @@ For stable, tested releases, visit the [Releases](https://github.com/YOUR_USERNA
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/Craftium.git
+   git clone https://github.com/m9dful1/Craftium.git
    cd Craftium
    ```
 
