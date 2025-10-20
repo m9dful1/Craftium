@@ -264,6 +264,13 @@ CGEventRef keyboardEventCallback([[maybe_unused]] CGEventTapProxy proxy, CGEvent
     // Cast refcon back to our ControllerApp instance
     // Use auto for type deduction
     auto* appInstance = static_cast<ControllerApp*>(refcon);
+
+    // Debug: Log that callback was triggered
+    static int callbackCount = 0;
+    if (callbackCount < 5) { // Only log first 5 to avoid spam
+        qDebug() << "Callback triggered, count:" << ++callbackCount << "type:" << type << "isRecording:" << (appInstance ? appInstance->isRecording() : false);
+    }
+
     if (appInstance == nullptr || !appInstance->isRecording()) { // Use a public getter for recording state
         return event; // Pass event through if not recording or instance is null
     }
@@ -272,6 +279,8 @@ CGEventRef keyboardEventCallback([[maybe_unused]] CGEventTapProxy proxy, CGEvent
     if (type == kCGEventKeyDown || type == kCGEventKeyUp) {
         CGKeyCode keyCode = (CGKeyCode)CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
         bool isPress = (type == kCGEventKeyDown);
+
+        qDebug() << "Key event in callback - keyCode:" << keyCode << "isPress:" << isPress;
 
         // Call the instance method via the pointer
         appInstance->recordKeyEvent(keyCode, isPress);
