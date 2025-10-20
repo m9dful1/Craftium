@@ -12,9 +12,19 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
 
     if (window) {
         if (floatingLevel) {
-            [window setLevel:NSFloatingWindowLevel];
+            // Use NSPopUpMenuWindowLevel (higher than NSFloatingWindowLevel)
+            // This is level 101, which should stay above most applications including games
+            [window setLevel:NSPopUpMenuWindowLevel];
+
+            // Configure window to appear in Mission Control and all Spaces
+            [window setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
+                                          NSWindowCollectionBehaviorParticipatesInCycle |
+                                          NSWindowCollectionBehaviorFullScreenAuxiliary];
         } else {
             [window setLevel:NSNormalWindowLevel];
+
+            // Reset to default behavior
+            [window setCollectionBehavior:NSWindowCollectionBehaviorDefault];
         }
     }
 }

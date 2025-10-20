@@ -1404,7 +1404,7 @@ void ControllerApp::setAlwaysOnTop(bool enable) {
     if (windowId) {
         setMacOSWindowLevel(reinterpret_cast<void*>(windowId), enable);
         if (enable) {
-            qDebug() << "Set window to NSFloatingWindowLevel";
+            qDebug() << "Set window to NSPopUpMenuWindowLevel (high priority) with Mission Control support";
         } else {
             qDebug() << "Set window to NSNormalWindowLevel";
         }
