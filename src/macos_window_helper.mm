@@ -11,6 +11,8 @@ static const void* kCraftiumOriginalWindowClassKey = &kCraftiumOriginalWindowCla
 static const char* kCraftiumFloatingSuffix = "_CraftiumFloating";
 static pid_t gCraftiumLastForegroundPID = -1;
 static id gCraftiumActivationObserver = nil;
+static NSApplicationActivationPolicy gCraftiumOriginalPolicy = NSApplicationActivationPolicyRegular;
+static BOOL gCraftiumPolicyStored = NO;
 
 static BOOL craftium_canBecomeKeyWindow(id, SEL) {
     return NO;
@@ -158,6 +160,28 @@ void craftiumReactivateLastForegroundApp(void) {
 
     NSLog(@"Craftium: reactivating app %@ (%d)", target.localizedName, gCraftiumLastForegroundPID);
     [target activateWithOptions:0];
+}
+
+void craftiumSetAccessoryActivation(bool enable) {
+    NSApplication* app = [NSApplication sharedApplication];
+    NSApplicationActivationPolicy currentPolicy = [app activationPolicy];
+
+    if (enable) {
+        if (!gCraftiumPolicyStored) {
+            gCraftiumOriginalPolicy = currentPolicy;
+            gCraftiumPolicyStored = YES;
+        }
+        if (currentPolicy != NSApplicationActivationPolicyAccessory) {
+            [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+            NSLog(@"Craftium: switched activation policy to Accessory");
+        }
+    } else {
+        if (gCraftiumPolicyStored && currentPolicy != gCraftiumOriginalPolicy) {
+            [app setActivationPolicy:gCraftiumOriginalPolicy];
+            NSLog(@"Craftium: restored activation policy to %ld", (long)gCraftiumOriginalPolicy);
+        }
+        gCraftiumPolicyStored = NO;
+    }
 }
 
 #ifdef __cplusplus

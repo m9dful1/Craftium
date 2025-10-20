@@ -1564,6 +1564,10 @@ void ControllerApp::setAlwaysOnTop(bool enable) {
 
     show();
 
+#ifdef __APPLE__
+    craftiumSetAccessoryActivation(enable);
+#endif
+
     if (alwaysOnTopCheckbox && alwaysOnTopCheckbox->isChecked() != enable) {
         QSignalBlocker blocker(alwaysOnTopCheckbox);
         alwaysOnTopCheckbox->setChecked(enable);
