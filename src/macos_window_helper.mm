@@ -11,7 +11,7 @@ static const void* kCraftiumOriginalWindowClassKey = &kCraftiumOriginalWindowCla
 static const char* kCraftiumFloatingSuffix = "_CraftiumFloating";
 
 static BOOL craftium_canBecomeKeyWindow(id, SEL) {
-    return YES;
+    return NO;
 }
 
 static BOOL craftium_canBecomeMainWindow(id, SEL) {
@@ -19,7 +19,11 @@ static BOOL craftium_canBecomeMainWindow(id, SEL) {
 }
 
 static BOOL craftium_becomesKeyOnlyIfNeeded(id, SEL) {
-    return YES;
+    return NO;
+}
+
+static BOOL craftium_acceptsFirstResponder(id, SEL) {
+    return NO;
 }
 
 static Class craftiumEnsureFloatingSubclass(Class originalClass) {
@@ -40,6 +44,7 @@ static Class craftiumEnsureFloatingSubclass(Class originalClass) {
         class_replaceMethod(floatingClass, @selector(canBecomeKeyWindow), (IMP)craftium_canBecomeKeyWindow, "c@:");
         class_replaceMethod(floatingClass, @selector(canBecomeMainWindow), (IMP)craftium_canBecomeMainWindow, "c@:");
         class_replaceMethod(floatingClass, @selector(becomesKeyOnlyIfNeeded), (IMP)craftium_becomesKeyOnlyIfNeeded, "c@:");
+        class_replaceMethod(floatingClass, @selector(acceptsFirstResponder), (IMP)craftium_acceptsFirstResponder, "c@:");
 
         objc_registerClassPair(floatingClass);
     }
@@ -96,6 +101,13 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
             // Reset to default behavior
             [window setCollectionBehavior:NSWindowCollectionBehaviorDefault];
         }
+    }
+}
+
+void craftiumDeactivateApp(void) {
+    NSApplication* app = [NSApplication sharedApplication];
+    if ([app isActive]) {
+        [app deactivate];
     }
 }
 

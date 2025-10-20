@@ -28,6 +28,7 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QTextBrowser>
+#include <QEvent>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -429,6 +430,19 @@ ControllerApp::~ControllerApp() {
         appSwitchCheckTimer = nullptr;
     }
 #endif
+}
+
+bool ControllerApp::event(QEvent* event) {
+#ifdef __APPLE__
+    if (alwaysOnTop && event && event->type() == QEvent::WindowActivate) {
+        QTimer::singleShot(0, this, [this]() {
+            if (!QApplication::activeModalWidget() && !QApplication::activePopupWidget()) {
+                craftiumDeactivateApp();
+            }
+        });
+    }
+#endif
+    return QWidget::event(event);
 }
 
 void ControllerApp::setupUI() {

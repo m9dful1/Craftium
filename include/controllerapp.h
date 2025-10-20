@@ -86,6 +86,7 @@ private:
     void setupMenuBar();
     QAction* findActionInMenu(const QList<QAction*>& menuActions, const QString& menuName, const QString& actionName);
     void updateStatusLabel(const QString& message);
+    bool event(QEvent* event) override;
 
 #ifdef _WIN32
     std::string vkCodeToString(DWORD vkCode) const;
