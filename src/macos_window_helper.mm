@@ -10,7 +10,7 @@ extern "C" {
 static const void* kCraftiumOriginalWindowClassKey = &kCraftiumOriginalWindowClassKey;
 static const char* kCraftiumFloatingSuffix = "_CraftiumFloating";
 static const void* kCraftiumOriginalStyleMaskKey = &kCraftiumOriginalStyleMaskKey;
-static NSRunningApplication* gCraftiumLastForegroundApp = nil;
+static pid_t gCraftiumLastForegroundPID = -1;
 static id gCraftiumActivationObserver = nil;
 
 static BOOL craftium_canBecomeKeyWindow(id, SEL) {
@@ -139,26 +139,35 @@ void craftiumInstallFrontmostObserver(void) {
 
     NSRunningApplication* currentFront = [workspace frontmostApplication];
     if (currentFront && ![currentFront isEqual:selfApp]) {
-        gCraftiumLastForegroundApp = currentFront;
+        gCraftiumLastForegroundPID = currentFront.processIdentifier;
     }
 
     gCraftiumActivationObserver = [center addObserverForName:NSWorkspaceDidActivateApplicationNotification
                                                        object:nil
                                                         queue:[NSOperationQueue mainQueue]
                                                    usingBlock:^(NSNotification* note) {
-        NSRunningApplication* activatedApp = note.userInfo[NSWorkspaceApplicationKey];
-        if (![activatedApp isEqual:selfApp]) {
-            gCraftiumLastForegroundApp = activatedApp;
+        id value = note.userInfo[NSWorkspaceApplicationKey];
+        if ([value isKindOfClass:[NSRunningApplication class]]) {
+            NSRunningApplication* activatedApp = (NSRunningApplication*)value;
+            if (![activatedApp isEqual:selfApp]) {
+                gCraftiumLastForegroundPID = activatedApp.processIdentifier;
+            }
         }
     }];
 }
 
 void craftiumReactivateLastForegroundApp(void) {
-    if (!gCraftiumLastForegroundApp || [gCraftiumLastForegroundApp isTerminated]) {
+    if (gCraftiumLastForegroundPID <= 0) {
         return;
     }
 
-    [gCraftiumLastForegroundApp activateWithOptions:0];
+    NSRunningApplication* target = [NSRunningApplication runningApplicationWithProcessIdentifier:gCraftiumLastForegroundPID];
+    if (!target || [target isTerminated]) {
+        gCraftiumLastForegroundPID = -1;
+        return;
+    }
+
+    [target activateWithOptions:0];
 }
 
 #ifdef __cplusplus
