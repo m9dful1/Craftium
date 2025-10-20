@@ -28,7 +28,7 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QTextBrowser>
-#include <QMouseEvent>
+#include <QSignalBlocker>
 #include <QEvent>
 
 #ifdef _WIN32
@@ -397,6 +397,7 @@ ControllerApp::ControllerApp(QWidget *parent)
 
 #ifdef __APPLE__
     // Check Accessibility permissions at launch and show dialog if needed
+    craftiumInstallFrontmostObserver();
     QTimer::singleShot(500, this, [this]() {
         checkAndRequestAccessibilityPermissions();
     });
@@ -444,11 +445,6 @@ bool ControllerApp::event(QEvent* event) {
         });
     }
 
-    if (alwaysOnTop && event) {
-        if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick) {
-            craftiumPreventWindowOrdering();
-        }
-    }
 #endif
     return QWidget::event(event);
 }
@@ -1556,29 +1552,42 @@ void ControllerApp::clearFocusFromControls() {
 }
 
 void ControllerApp::setAlwaysOnTop(bool enable) {
-    Qt::WindowFlags flags = windowFlags();
+    alwaysOnTop = enable;
 
-    if (enable) {
-        // Add the StaysOnTopHint flag
-        setWindowFlags(flags | Qt::WindowStaysOnTopHint);
-        updateStatusLabel("Status: Window will stay on top");
-    } else {
-        // Remove the StaysOnTopHint flag
-        setWindowFlags(flags & ~Qt::WindowStaysOnTopHint);
-        updateStatusLabel("Status: Window will behave normally");
-    }
+    setWindowFlag(Qt::WindowStaysOnTopHint, enable);
+    setWindowFlag(Qt::Tool, enable);
+    setWindowFlag(Qt::WindowDoesNotAcceptFocus, enable);
+    setAttribute(Qt::WA_ShowWithoutActivating, enable);
+#ifdef __APPLE__
+    setAttribute(Qt::WA_MacAlwaysShowToolWindow, enable);
+#endif
 
-    // The window needs to be shown again after changing flags
     show();
 
+    if (alwaysOnTopCheckbox && alwaysOnTopCheckbox->isChecked() != enable) {
+        QSignalBlocker blocker(alwaysOnTopCheckbox);
+        alwaysOnTopCheckbox->setChecked(enable);
+    }
+
 #ifdef __APPLE__
-    // On macOS, use native window level API for maximum priority
-    // This ensures the window stays on top even over games in borderless windowed mode
+    if (menuBar) {
+        if (QAction* alwaysOnTopAction = findActionInMenu(menuBar->actions(), "View", "Always on Top")) {
+            if (alwaysOnTopAction->isChecked() != enable) {
+                QSignalBlocker blocker(alwaysOnTopAction);
+                alwaysOnTopAction->setChecked(enable);
+            }
+        }
+    }
+#endif
+
+    updateStatusLabel(enable ? "Status: Window will stay on top" : "Status: Window will behave normally");
+
+#ifdef __APPLE__
     WId windowId = winId();
     if (windowId) {
         setMacOSWindowLevel(reinterpret_cast<void*>(windowId), enable);
         if (enable) {
-            qDebug() << "Set window to NSPopUpMenuWindowLevel (high priority) with Mission Control support";
+            qDebug() << "Set window to NSPopUpMenuWindowLevel (high priority)";
         } else {
             qDebug() << "Set window to NSNormalWindowLevel";
         }

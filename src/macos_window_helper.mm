@@ -9,7 +9,6 @@ extern "C" {
 
 static const void* kCraftiumOriginalWindowClassKey = &kCraftiumOriginalWindowClassKey;
 static const char* kCraftiumFloatingSuffix = "_CraftiumFloating";
-static const void* kCraftiumOriginalStyleMaskKey = &kCraftiumOriginalStyleMaskKey;
 static pid_t gCraftiumLastForegroundPID = -1;
 static id gCraftiumActivationObserver = nil;
 
@@ -71,14 +70,6 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
                 }
             }
 
-            // Apply the non-activating panel style mask so clicks do not raise other windows
-            NSUInteger currentMask = [window styleMask];
-            if (!(currentMask & NSWindowStyleMaskNonactivatingPanel)) {
-                NSNumber* storedMask = [NSNumber numberWithUnsignedInteger:currentMask];
-                objc_setAssociatedObject(window, kCraftiumOriginalStyleMaskKey, storedMask, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                [window setStyleMask:(currentMask | NSWindowStyleMaskNonactivatingPanel)];
-            }
-
             // Use NSPopUpMenuWindowLevel (higher than NSFloatingWindowLevel)
             // This is level 101, which should stay above most applications including games
             [window setLevel:NSPopUpMenuWindowLevel];
@@ -105,12 +96,6 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
             if (originalClass) {
                 object_setClass(window, originalClass);
                 objc_setAssociatedObject(window, kCraftiumOriginalWindowClassKey, nil, OBJC_ASSOCIATION_ASSIGN);
-            }
-
-            // Restore original style mask if we modified it
-            if (NSNumber* storedMask = (NSNumber*)objc_getAssociatedObject(window, kCraftiumOriginalStyleMaskKey)) {
-                [window setStyleMask:[storedMask unsignedIntegerValue]];
-                objc_setAssociatedObject(window, kCraftiumOriginalStyleMaskKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             }
 
             [window setLevel:NSNormalWindowLevel];
@@ -168,10 +153,6 @@ void craftiumReactivateLastForegroundApp(void) {
     }
 
     [target activateWithOptions:0];
-}
-
-void craftiumPreventWindowOrdering(void) {
-    [[NSApplication sharedApplication] preventWindowOrdering];
 }
 
 #ifdef __cplusplus

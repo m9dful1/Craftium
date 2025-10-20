@@ -11,7 +11,6 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel);
 void craftiumDeactivateApp(void);
 void craftiumInstallFrontmostObserver(void);
 void craftiumReactivateLastForegroundApp(void);
-void craftiumPreventWindowOrdering(void);
 
 #ifdef __cplusplus
 }
