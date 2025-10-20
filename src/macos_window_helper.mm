@@ -10,6 +10,8 @@ extern "C" {
 static const void* kCraftiumOriginalWindowClassKey = &kCraftiumOriginalWindowClassKey;
 static const char* kCraftiumFloatingSuffix = "_CraftiumFloating";
 static const void* kCraftiumOriginalStyleMaskKey = &kCraftiumOriginalStyleMaskKey;
+static NSRunningApplication* gCraftiumLastForegroundApp = nil;
+static id gCraftiumActivationObserver = nil;
 
 static BOOL craftium_canBecomeKeyWindow(id, SEL) {
     return NO;
@@ -124,6 +126,39 @@ void craftiumDeactivateApp(void) {
     if ([app isActive]) {
         [app deactivate];
     }
+}
+
+void craftiumInstallFrontmostObserver(void) {
+    if (gCraftiumActivationObserver != nil) {
+        return;
+    }
+
+    NSWorkspace* workspace = [NSWorkspace sharedWorkspace];
+    NSNotificationCenter* center = [workspace notificationCenter];
+    NSRunningApplication* selfApp = [NSRunningApplication currentApplication];
+
+    NSRunningApplication* currentFront = [workspace frontmostApplication];
+    if (currentFront && ![currentFront isEqual:selfApp]) {
+        gCraftiumLastForegroundApp = currentFront;
+    }
+
+    gCraftiumActivationObserver = [center addObserverForName:NSWorkspaceDidActivateApplicationNotification
+                                                       object:nil
+                                                        queue:[NSOperationQueue mainQueue]
+                                                   usingBlock:^(NSNotification* note) {
+        NSRunningApplication* activatedApp = note.userInfo[NSWorkspaceApplicationKey];
+        if (![activatedApp isEqual:selfApp]) {
+            gCraftiumLastForegroundApp = activatedApp;
+        }
+    }];
+}
+
+void craftiumReactivateLastForegroundApp(void) {
+    if (!gCraftiumLastForegroundApp || [gCraftiumLastForegroundApp isTerminated]) {
+        return;
+    }
+
+    [gCraftiumLastForegroundApp activateWithOptions:0];
 }
 
 #ifdef __cplusplus

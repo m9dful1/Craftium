@@ -9,6 +9,8 @@ extern "C" {
 // Pass the WId (void*) from Qt's winId() and whether to use floating level
 void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel);
 void craftiumDeactivateApp(void);
+void craftiumInstallFrontmostObserver(void);
+void craftiumReactivateLastForegroundApp(void);
 
 #ifdef __cplusplus
 }

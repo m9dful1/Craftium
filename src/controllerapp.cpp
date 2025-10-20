@@ -396,6 +396,7 @@ ControllerApp::ControllerApp(QWidget *parent)
 
 #ifdef __APPLE__
     // Check Accessibility permissions at launch and show dialog if needed
+    craftiumInstallFrontmostObserver();
     QTimer::singleShot(500, this, [this]() {
         checkAndRequestAccessibilityPermissions();
     });
@@ -438,6 +439,7 @@ bool ControllerApp::event(QEvent* event) {
         QTimer::singleShot(0, this, [this]() {
             if (!QApplication::activeModalWidget() && !QApplication::activePopupWidget()) {
                 craftiumDeactivateApp();
+                craftiumReactivateLastForegroundApp();
             }
         });
     }
