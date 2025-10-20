@@ -11,6 +11,7 @@ extern "C" {
 static const void* kCraftiumOriginalWindowClassKey = &kCraftiumOriginalWindowClassKey;
 static const char* kCraftiumFloatingSuffix = "_CraftiumFloating";
 static pid_t gCraftiumLastForegroundPID = -1;
+static pid_t gCraftiumLastInferredPID = -1;
 static id gCraftiumActivationObserver = nil;
 static NSInteger gCraftiumWindowNumber = 0;
 
@@ -112,6 +113,7 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
     else {
         gCraftiumWindowNumber = 0;
         gCraftiumLastForegroundPID = -1;
+        gCraftiumLastInferredPID = -1;
     }
 }
 
@@ -134,6 +136,7 @@ void craftiumInstallFrontmostObserver(void) {
     NSRunningApplication* currentFront = [workspace frontmostApplication];
     if (currentFront && ![currentFront isEqual:selfApp]) {
         gCraftiumLastForegroundPID = currentFront.processIdentifier;
+        gCraftiumLastInferredPID = gCraftiumLastForegroundPID;
         NSLog(@"Craftium: initial frontmost app %@ (%d)", currentFront.localizedName, currentFront.processIdentifier);
     }
 
@@ -146,6 +149,7 @@ void craftiumInstallFrontmostObserver(void) {
             NSRunningApplication* activatedApp = (NSRunningApplication*)value;
             if (![activatedApp isEqual:selfApp]) {
                 gCraftiumLastForegroundPID = activatedApp.processIdentifier;
+                gCraftiumLastInferredPID = gCraftiumLastForegroundPID;
                 NSLog(@"Craftium: observed frontmost app %@ (%d)", activatedApp.localizedName, activatedApp.processIdentifier);
             }
         }
@@ -156,6 +160,7 @@ void craftiumReactivateLastForegroundApp(void) {
     pid_t candidatePID = craftiumFindFrontmostPIDBelowWindow();
     if (candidatePID > 0) {
         gCraftiumLastForegroundPID = candidatePID;
+        gCraftiumLastInferredPID = candidatePID;
         NSLog(@"Craftium: inferred frontmost PID below window = %d", candidatePID);
     }
 
@@ -173,6 +178,14 @@ void craftiumReactivateLastForegroundApp(void) {
 
     NSLog(@"Craftium: reactivating app %@ (%d)", target.localizedName, gCraftiumLastForegroundPID);
     [target activateWithOptions:0];
+
+    if (gCraftiumLastInferredPID > 0 && gCraftiumLastInferredPID != gCraftiumLastForegroundPID) {
+        NSRunningApplication* inferred = [NSRunningApplication runningApplicationWithProcessIdentifier:gCraftiumLastInferredPID];
+        if (inferred && ![inferred isTerminated]) {
+            [inferred activateWithOptions:0];
+            NSLog(@"Craftium: ensured last inferred app %@ (%d) remains active", inferred.localizedName, gCraftiumLastInferredPID);
+        }
+    }
 }
 
 #ifdef __cplusplus
