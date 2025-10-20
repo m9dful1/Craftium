@@ -1,0 +1,72 @@
+# Build directories
+build/
+cmake-build-*/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+# Qt
+*.pro.user
+*.pro.user.*
+*.qmake.stash
+*.autosave
+.qmake.cache
+.qmake.vars
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qm
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.dmg
+*.app
+
+# Executables
+Craftium
+*.exe
+*.out
+*.dll
+*.dylib
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.qt/
+
+# Python (from old script)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+dist/
+build/
+*.egg-info/
+*.spec
+
+# Test files
+Test*.json
+test*.json
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Logs
+*.log
