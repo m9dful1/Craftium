@@ -1,33 +1,51 @@
 #import <AppKit/AppKit.h>
 #include <QtCore/Qt>
 #import <objc/runtime.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Custom floating panel class to keep Craftium on top without activating other apps
-@interface CraftiumFloatingPanel : NSPanel
-@end
+static const void* kCraftiumOriginalWindowClassKey = &kCraftiumOriginalWindowClassKey;
+static const char* kCraftiumFloatingSuffix = "_CraftiumFloating";
 
-@implementation CraftiumFloatingPanel
-// Allow the panel to receive focus when explicitly requested (e.g., for text input)
-- (BOOL)canBecomeKeyWindow {
+static BOOL craftium_canBecomeKeyWindow(id, SEL) {
     return YES;
 }
 
-// Prevent the panel from becoming the main window so other apps keep their focus
-- (BOOL)canBecomeMainWindow {
+static BOOL craftium_canBecomeMainWindow(id, SEL) {
     return NO;
 }
 
-// Only become key when the system explicitly needs it
-- (BOOL)becomesKeyOnlyIfNeeded {
+static BOOL craftium_becomesKeyOnlyIfNeeded(id, SEL) {
     return YES;
 }
-@end
 
-static const void* kCraftiumOriginalWindowClassKey = &kCraftiumOriginalWindowClassKey;
+static Class craftiumEnsureFloatingSubclass(Class originalClass) {
+    if (!originalClass) {
+        return Nil;
+    }
+
+    NSString* originalName = NSStringFromClass(originalClass);
+    NSString* subclassName = [originalName stringByAppendingString:@(kCraftiumFloatingSuffix)];
+    Class floatingClass = objc_lookUpClass([subclassName UTF8String]);
+
+    if (!floatingClass) {
+        floatingClass = objc_allocateClassPair(originalClass, [subclassName UTF8String], 0);
+        if (!floatingClass) {
+            return Nil;
+        }
+
+        class_replaceMethod(floatingClass, @selector(canBecomeKeyWindow), (IMP)craftium_canBecomeKeyWindow, "c@:");
+        class_replaceMethod(floatingClass, @selector(canBecomeMainWindow), (IMP)craftium_canBecomeMainWindow, "c@:");
+        class_replaceMethod(floatingClass, @selector(becomesKeyOnlyIfNeeded), (IMP)craftium_becomesKeyOnlyIfNeeded, "c@:");
+
+        objc_registerClassPair(floatingClass);
+    }
+
+    return floatingClass;
+}
 
 // Helper function to set macOS window level
 void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
@@ -36,16 +54,14 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
 
     if (window) {
         if (floatingLevel) {
-            // Remember the original window class so we can restore it later
-            if (![window isKindOfClass:[CraftiumFloatingPanel class]]) {
-                Class originalClass = object_getClass(window);
-                objc_setAssociatedObject(window, kCraftiumOriginalWindowClassKey, originalClass, OBJC_ASSOCIATION_ASSIGN);
-                object_setClass(window, [CraftiumFloatingPanel class]);
+            Class currentClass = object_getClass(window);
+            if (strstr(class_getName(currentClass), kCraftiumFloatingSuffix) == nullptr) {
+                // Remember original class and promote to floating subclass
+                objc_setAssociatedObject(window, kCraftiumOriginalWindowClassKey, currentClass, OBJC_ASSOCIATION_ASSIGN);
+                if (Class floatingClass = craftiumEnsureFloatingSubclass(currentClass)) {
+                    object_setClass(window, floatingClass);
+                }
             }
-
-            CraftiumFloatingPanel* panel = (CraftiumFloatingPanel*)window;
-            [panel setFloatingPanel:YES];
-            [panel setWorksWhenModal:YES];
 
             // Use NSPopUpMenuWindowLevel (higher than NSFloatingWindowLevel)
             // This is level 101, which should stay above most applications including games
@@ -68,12 +84,6 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
             // This keeps it as a passive overlay that doesn't steal focus
             [window setHidesOnDeactivate:NO];
         } else {
-            if ([window isKindOfClass:[CraftiumFloatingPanel class]]) {
-                CraftiumFloatingPanel* panel = (CraftiumFloatingPanel*)window;
-                [panel setFloatingPanel:NO];
-                [panel setWorksWhenModal:NO];
-            }
-
             // Restore original window class if we promoted it to a panel
             Class originalClass = (Class)objc_getAssociatedObject(window, kCraftiumOriginalWindowClassKey);
             if (originalClass) {
