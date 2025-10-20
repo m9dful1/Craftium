@@ -125,6 +125,7 @@ void craftiumInstallFrontmostObserver(void) {
     NSRunningApplication* currentFront = [workspace frontmostApplication];
     if (currentFront && ![currentFront isEqual:selfApp]) {
         gCraftiumLastForegroundPID = currentFront.processIdentifier;
+        NSLog(@"Craftium: initial frontmost app %@ (%d)", currentFront.localizedName, currentFront.processIdentifier);
     }
 
     gCraftiumActivationObserver = [center addObserverForName:NSWorkspaceDidActivateApplicationNotification
@@ -136,6 +137,7 @@ void craftiumInstallFrontmostObserver(void) {
             NSRunningApplication* activatedApp = (NSRunningApplication*)value;
             if (![activatedApp isEqual:selfApp]) {
                 gCraftiumLastForegroundPID = activatedApp.processIdentifier;
+                NSLog(@"Craftium: observed frontmost app %@ (%d)", activatedApp.localizedName, activatedApp.processIdentifier);
             }
         }
     }];
@@ -143,15 +145,18 @@ void craftiumInstallFrontmostObserver(void) {
 
 void craftiumReactivateLastForegroundApp(void) {
     if (gCraftiumLastForegroundPID <= 0) {
+        NSLog(@"Craftium: no stored front app PID (=%d); skipping reactivation", gCraftiumLastForegroundPID);
         return;
     }
 
     NSRunningApplication* target = [NSRunningApplication runningApplicationWithProcessIdentifier:gCraftiumLastForegroundPID];
     if (!target || [target isTerminated]) {
+        NSLog(@"Craftium: stored app PID %d unavailable (target=%@)", gCraftiumLastForegroundPID, target);
         gCraftiumLastForegroundPID = -1;
         return;
     }
 
+    NSLog(@"Craftium: reactivating app %@ (%d)", target.localizedName, gCraftiumLastForegroundPID);
     [target activateWithOptions:0];
 }
 
