@@ -28,6 +28,7 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QTextBrowser>
+#include <QMouseEvent>
 #include <QEvent>
 
 #ifdef _WIN32
@@ -438,8 +439,15 @@ bool ControllerApp::event(QEvent* event) {
         QTimer::singleShot(0, this, [this]() {
             if (!QApplication::activeModalWidget() && !QApplication::activePopupWidget()) {
                 craftiumDeactivateApp();
+                craftiumReactivateLastForegroundApp();
             }
         });
+    }
+
+    if (alwaysOnTop && event) {
+        if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick) {
+            craftiumPreventWindowOrdering();
+        }
     }
 #endif
     return QWidget::event(event);

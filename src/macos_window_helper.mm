@@ -170,6 +170,10 @@ void craftiumReactivateLastForegroundApp(void) {
     [target activateWithOptions:0];
 }
 
+void craftiumPreventWindowOrdering(void) {
+    [[NSApplication sharedApplication] preventWindowOrdering];
+}
+
 #ifdef __cplusplus
 }
 #endif
