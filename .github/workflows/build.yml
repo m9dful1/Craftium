@@ -23,8 +23,6 @@ jobs:
         version: '6.7.3'
         host: 'mac'
         target: 'desktop'
-        arch: 'clang_64'
-        modules: 'qtbase qtwidgets'
         cache: true
 
     - name: Create build directory
