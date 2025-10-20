@@ -1191,25 +1191,11 @@ bool ControllerApp::startGlobalKeyListener() {
         return true; // Already started
     }
 
-    // First check if we have permissions without showing a prompt
-    bool hasPermissions = AXIsProcessTrusted();
+    qDebug() << "Attempting to start global key listener...";
 
-    if (!hasPermissions) {
-        qCritical() << "Accessibility permissions not granted";
-        QMessageBox::critical(this, "Permission Required",
-                              "<p>Craftium does not have <b>Accessibility permissions</b>.</p>"
-                              "<p>Please grant permissions:</p>"
-                              "<ol style='margin-left: 20px;'>"
-                              "<li>Open <b>System Settings</b></li>"
-                              "<li>Go to <b>Privacy & Security → Accessibility</b></li>"
-                              "<li>Find <b>Craftium</b> and toggle it <b>ON</b></li>"
-                              "<li>Restart Craftium</li>"
-                              "</ol>");
-        return false;
-    }
-
-    // Create an event tap
-    // We want to tap into keydown, keyup, and flag changes events
+    // Try to create an event tap first - this is the real test of permissions
+    // NOTE: For unsigned apps, AXIsProcessTrusted() can return false even when
+    // permissions work, so we test by actually creating the tap
     CGEventMask eventMask = (1 << kCGEventKeyDown) | (1 << kCGEventKeyUp) | (1 << kCGEventFlagsChanged);
 
     eventTap = CGEventTapCreate(kCGHIDEventTap, // Tap HID events
@@ -1220,12 +1206,47 @@ bool ControllerApp::startGlobalKeyListener() {
                               this); // Pass 'this' as user data (refcon)
 
     if (!eventTap) {
-        qCritical() << "Failed to create event tap - this usually means permissions were just granted";
-        QMessageBox::critical(this, "Restart Required",
-                              "<p>Failed to create keyboard event listener.</p>"
-                              "<p>If you just granted Accessibility permissions, please <b>restart Craftium</b> for the changes to take effect.</p>");
+        // Event tap creation failed - this means we definitely don't have permissions
+        qCritical() << "Failed to create event tap - permissions likely not granted";
+
+        QMessageBox msgBox(this);
+        msgBox.setIcon(QMessageBox::Critical);
+        msgBox.setWindowTitle("Permission Required");
+        msgBox.setTextFormat(Qt::RichText);
+        msgBox.setText("<p><b>Failed to start keyboard recording.</b></p>");
+        msgBox.setInformativeText(
+            "<p>Craftium needs <b>Accessibility permissions</b> to record keyboard events.</p>"
+            "<p><b>To grant permissions:</b></p>"
+            "<ol style='margin-left: 20px;'>"
+            "<li>Click <b>Open System Settings</b> below</li>"
+            "<li>Find <b>Craftium</b> in the Accessibility list</li>"
+            "<li>Toggle it <b>ON</b></li>"
+            "<li><b>Important:</b> You may need to quit and reopen Craftium</li>"
+            "</ol>"
+            "<p><i>Note: For security, macOS may require you to restart Craftium after granting permissions.</i></p>"
+        );
+
+        QPushButton* openSettingsBtn = msgBox.addButton("Open System Settings", QMessageBox::ActionRole);
+        msgBox.addButton(QMessageBox::Ok);
+        msgBox.setDefaultButton(openSettingsBtn);
+
+        msgBox.exec();
+
+        if (msgBox.clickedButton() == openSettingsBtn) {
+            // Open System Settings and trigger the permission prompt
+            const void *keys[] = { kAXTrustedCheckOptionPrompt };
+            const void *values[] = { kCFBooleanTrue };
+            CFDictionaryRef options = CFDictionaryCreate(kCFAllocatorDefault, keys, values, std::size(keys),
+                                                         &kCFCopyStringDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+            AXIsProcessTrustedWithOptions(options);
+            CFRelease(options);
+        }
+
         return false;
     }
+
+    // Event tap created successfully!
+    qDebug() << "Event tap created successfully";
 
     // Create a run loop source
     runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0);
@@ -1244,7 +1265,7 @@ bool ControllerApp::startGlobalKeyListener() {
     // Enable the event tap
     CGEventTapEnable(eventTap, true);
 
-    qDebug() << "Global key listener started (macOS Event Tap)";
+    qDebug() << "Global key listener started successfully (macOS Event Tap)";
     return true;
 }
 
@@ -1261,41 +1282,46 @@ void ControllerApp::stopGlobalKeyListener() {
 }
 
 void ControllerApp::checkAndRequestAccessibilityPermissions() {
-    // Check if we already have accessibility permissions (without prompting)
-    bool hasPermissions = AXIsProcessTrusted();
+    qDebug() << "Checking Accessibility permissions...";
 
-    if (!hasPermissions) {
-        qDebug() << "Accessibility permissions not granted - showing startup message";
+    // NOTE: For unsigned apps, AXIsProcessTrusted() can return false even when permissions
+    // are granted, because macOS ties permissions to the exact binary path.
+    // We'll show a one-time informational message, but won't block the app.
 
-        // Show informational dialog explaining why permissions are needed
+    // Check if we've already shown the welcome message
+    bool shownWelcome = settings->value("shownAccessibilityWelcome", false).toBool();
+
+    if (!shownWelcome) {
+        qDebug() << "First launch - showing Accessibility permissions info";
+
+        // Show informational dialog explaining why permissions might be needed
         QMessageBox msgBox(this);
         msgBox.setIcon(QMessageBox::Information);
-        msgBox.setWindowTitle("Accessibility Permissions Required");
+        msgBox.setWindowTitle("Welcome to Craftium!");
         msgBox.setTextFormat(Qt::RichText);
         msgBox.setText(
             "<h3>Welcome to Craftium!</h3>"
             "<p>To record keyboard sequences, Craftium needs <b>Accessibility</b> permissions.</p>"
         );
         msgBox.setInformativeText(
-            "<p><b>How to grant permissions:</b></p>"
+            "<p><b>If you haven't granted permissions yet:</b></p>"
             "<ol style='margin-left: 20px;'>"
             "<li>Click 'Open System Settings' below</li>"
-            "<li>Find <b>Craftium</b> in the list</li>"
+            "<li>Find <b>Craftium</b> in the Accessibility list</li>"
             "<li>Toggle the switch to <b>ON</b></li>"
-            "<li>Return to Craftium and click 'Start Recording'</li>"
+            "<li>Click 'Start Recording' to test</li>"
             "</ol>"
-            "<p><i>Note: You may need to restart Craftium after granting permissions.</i></p>"
+            "<p><i>Note: This message will only appear once.</i></p>"
         );
 
         QPushButton* openSettingsBtn = msgBox.addButton("Open System Settings", QMessageBox::ActionRole);
-        msgBox.addButton("I'll Do It Later", QMessageBox::RejectRole);
-        msgBox.setDefaultButton(openSettingsBtn);
+        QPushButton* okBtn = msgBox.addButton("OK, Got It", QMessageBox::AcceptRole);
+        msgBox.setDefaultButton(okBtn);
 
         msgBox.exec();
 
         if (msgBox.clickedButton() == openSettingsBtn) {
             // Open System Settings to Privacy & Security -> Accessibility
-            // This will trigger the permission prompt
             const void *keys[] = { kAXTrustedCheckOptionPrompt };
             const void *values[] = { kCFBooleanTrue };
             CFDictionaryRef options = CFDictionaryCreate(kCFAllocatorDefault, keys, values, std::size(keys),
@@ -1303,10 +1329,12 @@ void ControllerApp::checkAndRequestAccessibilityPermissions() {
             AXIsProcessTrustedWithOptions(options);
             CFRelease(options);
         }
-    } else {
-        qDebug() << "Accessibility permissions already granted";
-        updateStatusLabel("Status: Ready - Accessibility permissions granted");
+
+        // Mark that we've shown the welcome message
+        settings->setValue("shownAccessibilityWelcome", true);
     }
+
+    qDebug() << "Accessibility permission check complete";
 }
 #endif
 
