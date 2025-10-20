@@ -1556,21 +1556,8 @@ void ControllerApp::setAlwaysOnTop(bool enable) {
     alwaysOnTop = enable;
 
     setWindowFlag(Qt::WindowStaysOnTopHint, enable);
-    setWindowFlag(Qt::Tool, enable);
-    setWindowFlag(Qt::WindowDoesNotAcceptFocus, enable);
-#ifdef __APPLE__
-    setWindowFlag(Qt::WindowTransparentForInput, enable);
-#endif
-    setAttribute(Qt::WA_ShowWithoutActivating, enable);
-#ifdef __APPLE__
-    setAttribute(Qt::WA_MacAlwaysShowToolWindow, enable);
-#endif
 
     show();
-
-#ifdef __APPLE__
-    craftiumSetAccessoryActivation(enable);
-#endif
 
     if (alwaysOnTopCheckbox && alwaysOnTopCheckbox->isChecked() != enable) {
         QSignalBlocker blocker(alwaysOnTopCheckbox);
