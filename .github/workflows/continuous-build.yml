@@ -1,0 +1,135 @@
+name: Continuous Build
+
+on:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Create Continuous Release
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.7.3'
+        host: 'mac'
+        target: 'desktop'
+        arch: 'clang_64'
+        modules: 'qtbase qtwidgets'
+        cache: true
+
+    - name: Create build directory
+      run: mkdir -p build
+
+    - name: Configure CMake
+      run: |
+        cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+    - name: Build
+      run: |
+        cd build
+        cmake --build . --config Release
+
+    - name: Create DMG (macOS)
+      run: |
+        cd build
+        mkdir -p Craftium.app/Contents/MacOS
+        mkdir -p Craftium.app/Contents/Resources
+
+        # Copy executable
+        cp Craftium Craftium.app/Contents/MacOS/
+
+        # Create Info.plist
+        cat > Craftium.app/Contents/Info.plist << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>Craftium</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.spiritwise.craftium</string>
+            <key>CFBundleName</key>
+            <string>Craftium</string>
+            <key>CFBundleVersion</key>
+            <string>1.0.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>11.0</string>
+            <key>NSPrincipalClass</key>
+            <string>NSApplication</string>
+            <key>LSApplicationCategoryType</key>
+            <string>public.app-category.utilities</string>
+        </dict>
+        </plist>
+        EOF
+
+        # Use macdeployqt to bundle Qt dependencies
+        macdeployqt Craftium.app -dmg
+
+    - name: Get build info
+      id: build_info
+      run: |
+        BUILD_DATE=$(date +'%Y%m%d-%H%M')
+        SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+        echo "build_name=continuous-${BUILD_DATE}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+        echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+        echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+    - name: Rename artifacts
+      run: |
+        cd build
+        if [ -f Craftium.dmg ]; then
+          mv Craftium.dmg Craftium-macOS-${{ steps.build_info.outputs.build_name }}.dmg
+        fi
+
+    - name: Create or Update Continuous Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: continuous
+        name: Continuous Build (Latest)
+        body: |
+          **Automated build from latest commit**
+
+          Build Date: ${{ steps.build_info.outputs.build_date }}
+          Commit: ${{ github.sha }}
+
+          This is an automated build from the latest code on the main branch.
+
+          ### Installation
+          1. Download the DMG file below
+          2. Open the DMG
+          3. Drag Craftium.app to your Applications folder
+          4. First time running: Right-click the app and select "Open" to bypass Gatekeeper
+          5. Grant Accessibility permissions in System Settings → Privacy & Security → Accessibility
+
+          **Note:** These are development builds and may contain bugs. For stable releases, use tagged versions.
+        files: |
+          build/Craftium-macOS-*.dmg
+        prerelease: true
+        draft: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload artifacts to workflow
+      uses: actions/upload-artifact@v4
+      with:
+        name: Craftium-macOS-${{ steps.build_info.outputs.build_name }}
+        path: |
+          build/Craftium-macOS-*.dmg
+          build/Craftium
+        retention-days: 90

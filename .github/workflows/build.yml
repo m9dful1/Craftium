@@ -1,0 +1,113 @@
+name: Build Craftium
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ created ]
+
+jobs:
+  build-macos:
+    name: Build for macOS
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.7.3'
+        host: 'mac'
+        target: 'desktop'
+        arch: 'clang_64'
+        modules: 'qtbase qtwidgets'
+        cache: true
+
+    - name: Create build directory
+      run: mkdir -p build
+
+    - name: Configure CMake
+      run: |
+        cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+    - name: Build
+      run: |
+        cd build
+        cmake --build . --config Release
+
+    - name: Create DMG (macOS)
+      run: |
+        cd build
+        mkdir -p Craftium.app/Contents/MacOS
+        mkdir -p Craftium.app/Contents/Resources
+
+        # Copy executable
+        cp Craftium Craftium.app/Contents/MacOS/
+
+        # Create Info.plist
+        cat > Craftium.app/Contents/Info.plist << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>Craftium</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.spiritwise.craftium</string>
+            <key>CFBundleName</key>
+            <string>Craftium</string>
+            <key>CFBundleVersion</key>
+            <string>1.0.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>11.0</string>
+        </dict>
+        </plist>
+        EOF
+
+        # Use macdeployqt to bundle Qt dependencies
+        macdeployqt Craftium.app -dmg
+
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "release" ]; then
+          echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=$(date +'%Y%m%d')-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Rename artifacts
+      run: |
+        cd build
+        if [ -f Craftium.dmg ]; then
+          mv Craftium.dmg Craftium-macOS-${{ steps.version.outputs.version }}.dmg
+        fi
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Craftium-macOS-${{ steps.version.outputs.version }}
+        path: |
+          build/Craftium-macOS-*.dmg
+          build/Craftium
+        retention-days: 30
+
+    - name: Upload to Release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          build/Craftium-macOS-*.dmg
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
