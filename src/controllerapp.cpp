@@ -1557,6 +1557,9 @@ void ControllerApp::setAlwaysOnTop(bool enable) {
     setWindowFlag(Qt::WindowStaysOnTopHint, enable);
     setWindowFlag(Qt::Tool, enable);
     setWindowFlag(Qt::WindowDoesNotAcceptFocus, enable);
+#ifdef __APPLE__
+    setWindowFlag(Qt::WindowTransparentForInput, enable);
+#endif
     setAttribute(Qt::WA_ShowWithoutActivating, enable);
 #ifdef __APPLE__
     setAttribute(Qt::WA_MacAlwaysShowToolWindow, enable);
