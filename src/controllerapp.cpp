@@ -245,6 +245,10 @@ const std::map<CGKeyCode, std::string> nonPrintableKeyMap = {
 };
 } // end anonymous namespace
 
+// Forward declaration of helper for permission guidance
+static void showMacPermissionsDialog(ControllerApp* parent);
+static CGEventRef permissionTestCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void* refcon);
+
 // Define the key map at file scope - Marked as unused by linter, consider removing if truly unused.
 // Made const for good practice.
 const std::map<CGKeyCode, std::string> key_map = {
@@ -289,6 +293,57 @@ CGEventRef keyboardEventCallback([[maybe_unused]] CGEventTapProxy proxy, CGEvent
 
     // We are just observing, pass the event along
     return event;
+}
+
+static CGEventRef permissionTestCallback([[maybe_unused]] CGEventTapProxy proxy,
+                                         [[maybe_unused]] CGEventType type,
+                                         CGEventRef event,
+                                         [[maybe_unused]] void* refcon) {
+    return event;
+}
+
+static void showMacPermissionsDialog(ControllerApp* parent) {
+    if (!parent) {
+        return;
+    }
+
+    QMessageBox msgBox(parent);
+    msgBox.setIcon(QMessageBox::Critical);
+    msgBox.setWindowTitle("Permissions Required");
+    msgBox.setTextFormat(Qt::RichText);
+    msgBox.setText("<p><b>Craftium needs permission to capture keyboard events.</b></p>");
+    msgBox.setInformativeText(
+        "<p>Grant both <b>Accessibility</b> and <b>Input Monitoring</b> access in "
+        "System Settings so Craftium can record your key presses.</p>"
+        "<p><b>Steps:</b></p>"
+        "<ol style='margin-left: 20px;'>"
+        "<li>Move Craftium.app to your <b>Applications</b> folder if it is running from Downloads.</li>"
+        "<li>Open <b>System Settings → Privacy & Security</b>.</li>"
+        "<li>Enable Craftium under <b>Accessibility</b>.</li>"
+        "<li>Enable Craftium under <b>Input Monitoring</b>.</li>"
+        "<li>Quit and relaunch Craftium.</li>"
+        "</ol>"
+        "<p>If Craftium does not appear in either list, click the “+” button and add it from "
+        "the Applications folder.</p>");
+
+    QPushButton* openInputMonitoringBtn = msgBox.addButton("Open Input Monitoring", QMessageBox::ActionRole);
+    QPushButton* openAccessibilityBtn = msgBox.addButton("Open Accessibility", QMessageBox::ActionRole);
+    msgBox.addButton(QMessageBox::Ok);
+    msgBox.setDefaultButton(openInputMonitoringBtn);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == openAccessibilityBtn) {
+        const void *keys[] = { kAXTrustedCheckOptionPrompt };
+        const void *values[] = { kCFBooleanTrue };
+        CFDictionaryRef options = CFDictionaryCreate(kCFAllocatorDefault, keys, values, std::size(keys),
+                                                     &kCFCopyStringDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        AXIsProcessTrustedWithOptions(options);
+        CFRelease(options);
+        QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"));
+    } else if (msgBox.clickedButton() == openInputMonitoringBtn) {
+        QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"));
+    }
 }
 #endif
 
@@ -629,6 +684,14 @@ void ControllerApp::startRecording() {
     if (!recording && !playing) {
         // Clear focus from any controls before starting to record
         clearFocusFromControls();
+
+#ifdef __APPLE__
+        if (!hasInputMonitoringPermission()) {
+            updateStatusLabel("Status: Recording blocked - grant macOS permissions");
+            showMacPermissionsDialog(this);
+            return;
+        }
+#endif
 
         recording = true;
         {
@@ -1217,39 +1280,8 @@ bool ControllerApp::startGlobalKeyListener() {
     if (!eventTap) {
         // Event tap creation failed - this means we definitely don't have permissions
         qCritical() << "Failed to create event tap - permissions likely not granted";
-
-        QMessageBox msgBox(this);
-        msgBox.setIcon(QMessageBox::Critical);
-        msgBox.setWindowTitle("Permission Required");
-        msgBox.setTextFormat(Qt::RichText);
-        msgBox.setText("<p><b>Failed to start keyboard recording.</b></p>");
-        msgBox.setInformativeText(
-            "<p>Craftium needs <b>Accessibility permissions</b> to record keyboard events.</p>"
-            "<p><b>To grant permissions:</b></p>"
-            "<ol style='margin-left: 20px;'>"
-            "<li>Click <b>Open System Settings</b> below</li>"
-            "<li>Find <b>Craftium</b> in the Accessibility list</li>"
-            "<li>Toggle it <b>ON</b></li>"
-            "<li><b>Important:</b> You may need to quit and reopen Craftium</li>"
-            "</ol>"
-            "<p><i>Note: For security, macOS may require you to restart Craftium after granting permissions.</i></p>"
-        );
-
-        QPushButton* openSettingsBtn = msgBox.addButton("Open System Settings", QMessageBox::ActionRole);
-        msgBox.addButton(QMessageBox::Ok);
-        msgBox.setDefaultButton(openSettingsBtn);
-
-        msgBox.exec();
-
-        if (msgBox.clickedButton() == openSettingsBtn) {
-            // Open System Settings and trigger the permission prompt
-            const void *keys[] = { kAXTrustedCheckOptionPrompt };
-            const void *values[] = { kCFBooleanTrue };
-            CFDictionaryRef options = CFDictionaryCreate(kCFAllocatorDefault, keys, values, std::size(keys),
-                                                         &kCFCopyStringDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-            AXIsProcessTrustedWithOptions(options);
-            CFRelease(options);
-        }
+        updateStatusLabel("Status: Permission required to record");
+        showMacPermissionsDialog(this);
 
         return false;
     }
@@ -1290,6 +1322,23 @@ void ControllerApp::stopGlobalKeyListener() {
     }
 }
 
+bool ControllerApp::hasInputMonitoringPermission() const {
+    CGEventMask eventMask = (1 << kCGEventKeyDown) | (1 << kCGEventKeyUp);
+    CFMachPortRef tempTap = CGEventTapCreate(kCGHIDEventTap,
+                                             kCGHeadInsertEventTap,
+                                             kCGEventTapOptionListenOnly,
+                                             eventMask,
+                                             permissionTestCallback,
+                                             nullptr);
+    if (!tempTap) {
+        qWarning() << "Permission check: event tap creation failed";
+        return false;
+    }
+
+    CFRelease(tempTap);
+    return true;
+}
+
 void ControllerApp::checkAndRequestAccessibilityPermissions() {
     qDebug() << "Checking Accessibility permissions...";
 
@@ -1310,26 +1359,27 @@ void ControllerApp::checkAndRequestAccessibilityPermissions() {
         msgBox.setTextFormat(Qt::RichText);
         msgBox.setText(
             "<h3>Welcome to Craftium!</h3>"
-            "<p>To record keyboard sequences, Craftium needs <b>Accessibility</b> permissions.</p>"
+            "<p>To record keyboard sequences, Craftium needs <b>Accessibility</b> and "
+            "<b>Input Monitoring</b> permissions.</p>"
         );
         msgBox.setInformativeText(
             "<p><b>If you haven't granted permissions yet:</b></p>"
             "<ol style='margin-left: 20px;'>"
-            "<li>Click 'Open System Settings' below</li>"
-            "<li>Find <b>Craftium</b> in the Accessibility list</li>"
-            "<li>Toggle the switch to <b>ON</b></li>"
-            "<li>Click 'Start Recording' to test</li>"
+            "<li>Click one of the buttons below to jump to the relevant settings pane.</li>"
+            "<li>Enable Craftium under <b>Accessibility</b> and <b>Input Monitoring</b>.</li>"
+            "<li>Restart Craftium, then click 'Start Recording' to test.</li>"
             "</ol>"
             "<p><i>Note: This message will only appear once.</i></p>"
         );
 
-        QPushButton* openSettingsBtn = msgBox.addButton("Open System Settings", QMessageBox::ActionRole);
+        QPushButton* openAccessibilityBtn = msgBox.addButton("Open Accessibility", QMessageBox::ActionRole);
+        QPushButton* openInputMonitoringBtn = msgBox.addButton("Open Input Monitoring", QMessageBox::ActionRole);
         QPushButton* okBtn = msgBox.addButton("OK, Got It", QMessageBox::AcceptRole);
         msgBox.setDefaultButton(okBtn);
 
         msgBox.exec();
 
-        if (msgBox.clickedButton() == openSettingsBtn) {
+        if (msgBox.clickedButton() == openAccessibilityBtn) {
             // Open System Settings to Privacy & Security -> Accessibility
             const void *keys[] = { kAXTrustedCheckOptionPrompt };
             const void *values[] = { kCFBooleanTrue };
@@ -1337,6 +1387,9 @@ void ControllerApp::checkAndRequestAccessibilityPermissions() {
                                                          &kCFCopyStringDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
             AXIsProcessTrustedWithOptions(options);
             CFRelease(options);
+            QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"));
+        } else if (msgBox.clickedButton() == openInputMonitoringBtn) {
+            QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"));
         }
 
         // Mark that we've shown the welcome message

@@ -11,6 +11,8 @@ jobs:
   build-and-release:
     name: Build and Create Continuous Release
     runs-on: macos-latest
+    env:
+      MACOS_CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
 
     steps:
     - name: Checkout code
@@ -39,7 +41,7 @@ jobs:
         cd build
         cmake --build . --config Release
 
-    - name: Create DMG (macOS)
+    - name: Package macOS App
       run: |
         cd build
         mkdir -p Craftium.app/Contents/MacOS
@@ -77,7 +79,25 @@ jobs:
         EOF
 
         # Use macdeployqt to bundle Qt dependencies
-        macdeployqt Craftium.app -dmg
+        macdeployqt Craftium.app
+
+        # Code sign (Developer ID if provided, otherwise ad-hoc)
+        if [ -n "${MACOS_CODESIGN_IDENTITY}" ]; then
+          echo "Signing Craftium.app with ${MACOS_CODESIGN_IDENTITY}"
+          codesign --force --deep --options runtime --sign "${MACOS_CODESIGN_IDENTITY}" Craftium.app
+        else
+          echo "Ad-hoc signing Craftium.app"
+          codesign --force --deep --sign - Craftium.app
+        fi
+
+        # Recreate the DMG so it contains the signed app
+        rm -f Craftium.dmg
+        hdiutil create -volname Craftium -srcfolder Craftium.app -ov -format UDZO Craftium.dmg
+
+        # Optionally sign the DMG when a Developer ID is available
+        if [ -n "${MACOS_CODESIGN_IDENTITY}" ]; then
+          codesign --force --sign "${MACOS_CODESIGN_IDENTITY}" Craftium.dmg
+        fi
 
     - name: Get build info
       id: build_info
@@ -113,7 +133,7 @@ jobs:
           2. Open the DMG
           3. Drag Craftium.app to your Applications folder
           4. First time running: Right-click the app and select "Open" to bypass Gatekeeper
-          5. Grant Accessibility permissions in System Settings → Privacy & Security → Accessibility
+          5. Grant Accessibility and Input Monitoring permissions in System Settings → Privacy & Security
 
           **Note:** These are development builds and may contain bugs. For stable releases, use tagged versions.
         files: |

@@ -31,10 +31,12 @@ For stable, tested releases, visit the [Releases](https://github.com/m9dful1/Cra
 2. Open the DMG file
 3. Drag `Craftium.app` to your Applications folder
 4. **First launch**: Right-click the app and select "Open" to bypass Gatekeeper
-5. Grant **Accessibility permissions**:
-   - Go to System Settings → Privacy & Security → Accessibility
-   - Click the lock to make changes
-   - Add Craftium to the list of allowed apps
+5. Grant **Accessibility** and **Input Monitoring** permissions:
+   - Move `Craftium.app` to your Applications folder before granting access
+   - Go to System Settings → Privacy & Security
+   - Under **Accessibility**, enable Craftium (click the lock to make changes)
+   - Under **Input Monitoring**, enable Craftium (add it with the “+” button if needed)
+   - Quit and relaunch Craftium
 
 ## Usage
 
@@ -56,6 +58,26 @@ For stable, tested releases, visit the [Releases](https://github.com/m9dful1/Cra
 
 ### Viewing Sequences
 - Click **"▼ Show Sequence Details"** to see all recorded keystrokes with timing
+
+## macOS Permissions
+
+Craftium listens for global key events using the macOS `CGEventTap` API. macOS protects this capability behind **Accessibility** and **Input Monitoring** permissions.
+
+### Granting Permissions
+1. Move `Craftium.app` to `/Applications`.
+2. Open **System Settings → Privacy & Security**.
+3. Enable Craftium under **Accessibility**.
+4. Enable Craftium under **Input Monitoring**. If Craftium is missing, click the “+” button and add it from `/Applications`.
+5. Quit and relaunch Craftium to apply the changes.
+
+### After Updating Craftium
+macOS ties the permission grant to the exact binary. When you download a new build, replace the existing `Craftium.app` inside `/Applications` to preserve the granted permissions. If you build or notarise your own release, sign it so macOS recognises the app as the same binary:
+
+```bash
+codesign --force --deep --sign - /Applications/Craftium.app
+```
+
+Replace `-` with a Developer ID certificate if you have one to avoid Gatekeeper warnings.
 
 ## Building from Source
 
@@ -127,13 +149,15 @@ git push origin v1.0.0
 
 Then create a release on GitHub using that tag, and the build will automatically attach.
 
+> Tip: Provide a `MACOS_CODESIGN_IDENTITY` GitHub secret with your Apple Developer ID certificate if you want the CI workflow to produce fully signed builds. Without it, the workflow falls back to ad-hoc signing.
+
 ## Technical Details
 
 ### Architecture
 
 - **Main Window**: Qt6 Widgets-based UI
 - **Recording**: Platform-specific global keyboard hooks
-  - macOS: CGEventTap with Accessibility permissions
+  - macOS: CGEventTap with Accessibility and Input Monitoring permissions
   - Windows: Low-level keyboard hooks
 - **Playback**: Worker thread for non-blocking execution
 - **Thread Safety**: QMutex protection for sequence data
@@ -147,9 +171,9 @@ Then create a release on GitHub using that tag, and the build will automatically
 ## Troubleshooting
 
 ### Recording doesn't work
-- Ensure Accessibility permissions are granted
-- Try restarting the application
-- On macOS: System Settings → Privacy & Security → Accessibility
+- Ensure both Accessibility **and** Input Monitoring permissions are granted (System Settings → Privacy & Security)
+- Move Craftium to `/Applications`, grant permissions, then restart the app
+- Try restarting the application after changing permissions
 
 ### Playback doesn't work in target app
 - Ensure the target application is in focus before playback starts

@@ -98,6 +98,7 @@ private:
     CGKeyCode stringToKeyCode(const std::string& keyName) const;
     bool startGlobalKeyListener();
     void stopGlobalKeyListener();
+    bool hasInputMonitoringPermission() const;
     void checkAndRequestAccessibilityPermissions();
     CFMachPortRef eventTap = nullptr;
     CFRunLoopSourceRef runLoopSource = nullptr;
