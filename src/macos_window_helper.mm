@@ -1,6 +1,7 @@
 #import <AppKit/AppKit.h>
 #include <QtCore/Qt>
 #import <objc/runtime.h>
+#import <CoreGraphics/CoreGraphics.h>
 #include <string.h>
 
 #ifdef __cplusplus
@@ -13,6 +14,9 @@ static pid_t gCraftiumLastForegroundPID = -1;
 static id gCraftiumActivationObserver = nil;
 static NSApplicationActivationPolicy gCraftiumOriginalPolicy = NSApplicationActivationPolicyRegular;
 static BOOL gCraftiumPolicyStored = NO;
+static NSInteger gCraftiumWindowNumber = 0;
+
+static pid_t craftiumFindFrontmostPIDBelowWindow(void);
 
 static BOOL craftium_canBecomeKeyWindow(id, SEL) {
     return NO;
@@ -62,6 +66,7 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
     NSWindow* window = [view window];
 
     if (window) {
+        gCraftiumWindowNumber = [window windowNumber];
         if (floatingLevel) {
             Class currentClass = object_getClass(window);
             if (strstr(class_getName(currentClass), kCraftiumFloatingSuffix) == nullptr) {
@@ -73,7 +78,7 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
             }
 
             // Use NSPopUpMenuWindowLevel (higher than NSFloatingWindowLevel)
-            // This is level 101, which should stay above most applications including games
+            // This is level 101, which should stay above most applications including fullscreen apps
             [window setLevel:NSPopUpMenuWindowLevel];
 
             // Configure window behavior:
@@ -105,6 +110,9 @@ void setMacOSWindowLevel(void* nsViewPtr, bool floatingLevel) {
             // Reset to default behavior
             [window setCollectionBehavior:NSWindowCollectionBehaviorDefault];
         }
+    }
+    else {
+        gCraftiumWindowNumber = 0;
     }
 }
 
@@ -146,6 +154,12 @@ void craftiumInstallFrontmostObserver(void) {
 }
 
 void craftiumReactivateLastForegroundApp(void) {
+    pid_t candidatePID = craftiumFindFrontmostPIDBelowWindow();
+    if (candidatePID > 0) {
+        gCraftiumLastForegroundPID = candidatePID;
+        NSLog(@"Craftium: inferred frontmost PID below window = %d", candidatePID);
+    }
+
     if (gCraftiumLastForegroundPID <= 0) {
         NSLog(@"Craftium: no stored front app PID (=%d); skipping reactivation", gCraftiumLastForegroundPID);
         return;
@@ -187,3 +201,46 @@ void craftiumSetAccessoryActivation(bool enable) {
 #ifdef __cplusplus
 }
 #endif
+static pid_t craftiumFindFrontmostPIDBelowWindow(void) {
+    if (gCraftiumWindowNumber == 0) {
+        return -1;
+    }
+
+    CFArrayRef windowInfoList = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenBelowWindow | kCGWindowListOptionOnScreenOnly, (CGWindowID)gCraftiumWindowNumber);
+    if (!windowInfoList) {
+        return -1;
+    }
+
+    pid_t result = -1;
+    CFIndex count = CFArrayGetCount(windowInfoList);
+    for (CFIndex i = 0; i < count; ++i) {
+        CFDictionaryRef info = (CFDictionaryRef)CFArrayGetValueAtIndex(windowInfoList, i);
+        if (!info) continue;
+
+        CFNumberRef pidNumber = (CFNumberRef)CFDictionaryGetValue(info, kCGWindowOwnerPID);
+        CFNumberRef alphaNumber = (CFNumberRef)CFDictionaryGetValue(info, kCGWindowAlpha);
+        CFNumberRef layerNumber = (CFNumberRef)CFDictionaryGetValue(info, kCGWindowLayer);
+
+        if (!pidNumber) continue;
+
+        CGFloat alpha = 1.0;
+        if (alphaNumber) {
+            CFNumberGetValue(alphaNumber, kCFNumberCGFloatType, &alpha);
+        }
+
+        int layer = 0;
+        if (layerNumber) {
+            CFNumberGetValue(layerNumber, kCFNumberIntType, &layer);
+        }
+
+        if (alpha <= 0.0 || layer != 0) {
+            continue;
+        }
+
+        CFNumberGetValue(pidNumber, kCFNumberSInt32Type, &result);
+        break;
+    }
+
+    CFRelease(windowInfoList);
+    return result;
+}

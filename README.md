@@ -3,17 +3,30 @@
 ![Build Status](https://github.com/m9dful1/Craftium/workflows/Build%20Craftium/badge.svg)
 ![Continuous Build](https://github.com/m9dful1/Craftium/workflows/Continuous%20Build/badge.svg)
 
-Craftium is a powerful keyboard automation tool designed to record and replay keyboard sequences with precise timing. Perfect for automating repetitive tasks in games like Final Fantasy 14, applications, or any software that accepts keyboard input.
+Craftium is a powerful keyboard automation tool designed to record and replay keyboard sequences with precise timing. Perfect for automating repetitive tasks in productivity workflows, software testing, data entry, or any application that accepts keyboard input.
+
+**IMPORTANT DISCLAIMER**: This software is intended for productivity automation and testing purposes only. Users are solely responsible for ensuring their use complies with the terms of service of any software they interact with. Use in online games or other software may violate terms of service and result in account penalties or bans.
 
 ## Features
 
-- 🎮 **Precise Keyboard Recording**: Capture all keystrokes with exact timing
+- ⌨️ **Precise Keyboard Recording**: Capture all keystrokes with exact timing
 - ⏱️ **Replay with Delays**: Playback sequences with the exact timing they were recorded
 - 💾 **Save & Load**: Save sequences as JSON files for later use
 - 🔄 **Repeat Playback**: Set custom repeat counts for sequences
 - 🎨 **Dark Mode**: Built-in dark theme for comfortable use
-- 📌 **Always on Top**: Enhanced window priority to stay visible over games
+- 📌 **Always on Top**: Enhanced window priority to stay visible over other applications
 - 🖥️ **macOS Native**: Optimized for macOS with full system integration
+
+## Use Cases
+
+Craftium is designed for legitimate productivity and automation tasks:
+
+- **Software Testing**: Automate repetitive QA test scenarios and regression testing
+- **Data Entry**: Speed up form filling and repetitive data input tasks
+- **Content Creation**: Automate overlay controls for streamers and content creators
+- **Accessibility**: Assist users with repetitive strain injuries or mobility limitations
+- **Development**: Test keyboard-heavy applications and shortcuts
+- **Productivity Workflows**: Automate common tasks across multiple applications
 
 ## Download
 
@@ -177,8 +190,8 @@ Then create a release on GitHub using that tag, and the build will automatically
 
 ### Playback doesn't work in target app
 - Ensure the target application is in focus before playback starts
-- For games, try borderless windowed mode instead of fullscreen
-- Some applications may block simulated input
+- For fullscreen applications, try windowed mode instead
+- Some applications may block simulated input for security reasons
 
 ### Window not staying on top
 - Ensure "Always on Top" checkbox is enabled

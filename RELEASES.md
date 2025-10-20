@@ -65,7 +65,7 @@ The first official release of Craftium, a powerful keyboard automation tool for 
 - 💾 Save and load sequences as JSON files
 - 🎨 Dark mode support
 - 📌 Enhanced "Always on Top" with native macOS window levels
-- 🎮 Perfect for automating tasks in games like Final Fantasy 14
+- 🚀 Perfect for automating productivity tasks, software testing, and data entry
 
 ### Installation
 1. Download `Craftium-macOS-v1.0.0.dmg` below
@@ -79,7 +79,7 @@ The first official release of Craftium, a powerful keyboard automation tool for 
 
 ### Known Issues
 - First launch may take a few seconds
-- Some fullscreen games may override window levels
+- Some fullscreen applications may override window levels
 
 ### Credits
 Designed by Jeremy Matthews
@@ -111,7 +111,7 @@ Designed by Jeremy Matthews
 - You have automatic builds working
 - Download and test the DMG
 - Make sure everything works correctly
-- Test the "Always on Top" feature with FF14
+- Test the "Always on Top" feature with your target applications
 
 ### Soon (Days 2-7)
 🧪 **Testing Phase**
@@ -164,7 +164,7 @@ Designed by Jeremy Matthews
 
 1. ✅ Download the DMG from the continuous release
 2. ✅ Test it to make sure it works
-3. ✅ Test the "Always on Top" feature with FF14
+3. ✅ Test the "Always on Top" feature with your applications
 4. ✅ Continue developing and testing
 5. ⏸️ Create v1.0.0 when you're ready for public release
 

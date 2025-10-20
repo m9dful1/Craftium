@@ -994,7 +994,8 @@ void ControllerApp::showHelpDialog() {
         
         <h2>Introduction</h2>
         <div class="section">
-            <p>Craftium is a powerful automation tool designed to record and replay keyboard sequences. It's ideal for automating repetitive tasks in games, applications, or any software that accepts keyboard input.</p>
+            <p>Craftium is a powerful automation tool designed to record and replay keyboard sequences. It's ideal for automating repetitive tasks in productivity workflows, software testing, data entry, or any application that accepts keyboard input.</p>
+            <p><b>IMPORTANT:</b> This software is intended for productivity automation and testing purposes only. Users are solely responsible for ensuring their use complies with the terms of service of any software they interact with.</p>
         </div>
         
         <h2>Quick Start</h2>
@@ -1082,8 +1083,8 @@ void ControllerApp::showHelpDialog() {
             <p><b>Playback doesn't work properly:</b></p>
             <ul>
                 <li>Ensure the target application is in focus before playback starts</li>
-                <li>For games, try running in windowed mode rather than fullscreen</li>
-                <li>Some applications may block simulated key inputs</li>
+                <li>For fullscreen applications, try running in windowed mode instead</li>
+                <li>Some applications may block simulated key inputs for security reasons</li>
             </ul>
         </div>
         
