@@ -505,7 +505,7 @@ void ControllerApp::setupUI() {
     });
     connect(stopPlayButton, &QPushButton::clicked, this, &ControllerApp::stopPlayback);
     connect(clearButton, &QPushButton::clicked, this, &ControllerApp::clearSequence);
-    
+
     // Add buttons to layout
     controlsLayout->addWidget(recordButton);
     controlsLayout->addWidget(stopRecordButton);
@@ -564,6 +564,9 @@ void ControllerApp::setupUI() {
     statusLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     statusLabel->setWordWrap(true);
     layout->addWidget(statusLabel);
+
+    // Record initial width so status text can be elided accordingly
+    minimumContentWidth = controlsWidget->sizeHint().width();
 
     // Initialize animation for expanding/collapsing sequence panel
     sequencePanelAnimation = new QPropertyAnimation(sequenceTextEdit, "maximumHeight", this);
@@ -631,12 +634,40 @@ void ControllerApp::setupUI() {
 
 void ControllerApp::updateStatusLabel(const QString& message) {
     if (!statusLabel) return;
-    
+
     // For debug output, always log the full message
     qDebug() << message;
-    
-    // Simply display the full message - word wrap will handle long text
-    statusLabel->setText(message);
+
+    statusLabel->setText(elideStatusText(message));
+}
+
+QString ControllerApp::elideStatusText(const QString& text) const {
+    if (!statusLabel) {
+        return text;
+    }
+
+    QString message = text;
+    const QString prefix = "Status: Notes loaded from ";
+    if (message.startsWith(prefix)) {
+        QString suffix = message.mid(prefix.length());
+        QString filename = QFileInfo(suffix).fileName();
+        message = prefix + filename;
+    }
+
+    const QString savePrefix = "Status: Notes saved to ";
+    if (message.startsWith(savePrefix)) {
+        QString suffix = message.mid(savePrefix.length());
+        QString filename = QFileInfo(suffix).fileName();
+        message = savePrefix + filename;
+    }
+
+    QFontMetrics metrics(statusLabel->font());
+    int availableWidth = statusLabel->width();
+    if (availableWidth <= 0) {
+        availableWidth = minimumContentWidth > 0 ? minimumContentWidth : 300;
+    }
+
+    return metrics.elidedText(message, Qt::ElideRight, availableWidth - 10);
 }
 
 void ControllerApp::clearSequence() {

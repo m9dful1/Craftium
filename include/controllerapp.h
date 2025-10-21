@@ -91,6 +91,7 @@ private:
     void setupMenuBar();
     QAction* findActionInMenu(const QList<QAction*>& menuActions, const QString& menuName, const QString& actionName);
     void updateStatusLabel(const QString& message);
+    QString elideStatusText(const QString& text) const;
     bool event(QEvent* event) override;
 
 #ifdef _WIN32
@@ -115,6 +116,8 @@ private:
     std::vector<KeyEvent> sequence;
     mutable QMutex sequenceMutex;  // Protects sequence vector from concurrent access
     std::chrono::high_resolution_clock::time_point lastEventTime;
+
+    int minimumContentWidth = 0;
 
     QThread* playbackThread = nullptr;
     PlaybackWorker* playbackWorker = nullptr;
