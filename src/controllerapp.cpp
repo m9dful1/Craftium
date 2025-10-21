@@ -31,6 +31,7 @@
 #include <QTextStream>
 #include <QStandardPaths>
 #include <QDir>
+#include <QScopedValueRollback>
 #include <QSignalBlocker>
 #include <QEvent>
 
@@ -432,7 +433,7 @@ ControllerApp::~ControllerApp() {
 
 bool ControllerApp::event(QEvent* event) {
 #ifdef __APPLE__
-    if (alwaysOnTop && event && event->type() == QEvent::WindowActivate) {
+    if (alwaysOnTop && !suppressFocusGuard && event && event->type() == QEvent::WindowActivate) {
         QTimer::singleShot(0, this, [this]() {
             QWidget* focusWidget = QApplication::focusWidget();
             bool internalFocus = focusWidget && focusWidget->window() == this;
@@ -1426,6 +1427,8 @@ bool ControllerApp::hasInputMonitoringPermission() const {
 void ControllerApp::checkAndRequestAccessibilityPermissions() {
     qDebug() << "Checking Accessibility permissions...";
 
+    QScopedValueRollback<bool> focusGuard(suppressFocusGuard, true);
+
     // NOTE: For unsigned apps, AXIsProcessTrusted() can return false even when permissions
     // are granted, because macOS ties permissions to the exact binary path.
     // We'll show a one-time informational message, but won't block the app.
@@ -1656,6 +1659,8 @@ void ControllerApp::saveNotesToFile() {
         return;
     }
 
+    QScopedValueRollback<bool> focusGuard(suppressFocusGuard, true);
+
     QString basePath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     if (basePath.isEmpty()) {
         basePath = QDir::homePath();
@@ -1688,6 +1693,8 @@ void ControllerApp::loadNotesFromFile() {
     if (!notesTextEdit) {
         return;
     }
+
+    QScopedValueRollback<bool> focusGuard(suppressFocusGuard, true);
 
     QString basePath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     if (basePath.isEmpty()) {

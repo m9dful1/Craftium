@@ -12,6 +12,7 @@
 #include <QCheckBox>
 #include <QMenuBar>
 #include <QFrame>
+#include <QScopedValueRollback>
 #include <string>
 #include <vector>
 #include <map>
@@ -147,6 +148,7 @@ private:
 
     // For "Always on Top" feature
     bool alwaysOnTop;
+    bool suppressFocusGuard = false;
 
 #if defined(__APPLE__)
     // void recordKeyEvent(CGKeyCode keyCode, bool isPress); // Moved to public
