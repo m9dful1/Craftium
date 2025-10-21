@@ -339,12 +339,6 @@ static void showMacPermissionsDialog(ControllerApp* parent) {
     msgBox.exec();
 
     if (msgBox.clickedButton() == openAccessibilityBtn) {
-        const void *keys[] = { kAXTrustedCheckOptionPrompt };
-        const void *values[] = { kCFBooleanTrue };
-        CFDictionaryRef options = CFDictionaryCreate(kCFAllocatorDefault, keys, values, std::size(keys),
-                                                     &kCFCopyStringDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-        AXIsProcessTrustedWithOptions(options);
-        CFRelease(options);
         QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"));
     } else if (msgBox.clickedButton() == openInputMonitoringBtn) {
         QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"));
@@ -353,12 +347,13 @@ static void showMacPermissionsDialog(ControllerApp* parent) {
 #endif
 
 ControllerApp::ControllerApp(QWidget *parent)
-    : QWidget(parent), recording(false), playing(false), alwaysOnTop(true) {
+    : QWidget(parent), recording(false), playing(false), alwaysOnTop(false) {
     // Initialize settings
     settings = new QSettings("Craftium", "Craftium", this);
     isDarkMode = settings->value("darkMode", true).toBool();
+    alwaysOnTop = settings->value("alwaysOnTop", false).toBool();
     qDebug() << "Initial dark mode value:" << isDarkMode;
-    
+
     setupUI();
     
     // Apply the initial theme
@@ -441,7 +436,10 @@ bool ControllerApp::event(QEvent* event) {
 #ifdef __APPLE__
     if (alwaysOnTop && event && event->type() == QEvent::WindowActivate) {
         QTimer::singleShot(0, this, [this]() {
-            if (!QApplication::activeModalWidget() && !QApplication::activePopupWidget()) {
+            QWidget* focusWidget = QApplication::focusWidget();
+            bool internalFocus = focusWidget && focusWidget->window() == this;
+
+            if (!internalFocus && !QApplication::activeModalWidget() && !QApplication::activePopupWidget()) {
                 craftiumDeactivateApp();
                 craftiumReactivateLastForegroundApp();
             }
@@ -550,8 +548,9 @@ void ControllerApp::setupUI() {
     sequenceTextEdit = new QTextEdit(this);
     sequenceTextEdit->setReadOnly(true);
     sequenceTextEdit->setVisible(false);
-    sequenceTextEdit->setMinimumHeight(150);
-    sequenceTextEdit->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    sequenceTextEdit->setMinimumHeight(0);
+    sequenceTextEdit->setMaximumHeight(0);
+    sequenceTextEdit->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     sequenceTextEdit->setLineWrapMode(QTextEdit::WidgetWidth); // Force text to wrap at widget width
     sequenceTextEdit->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     sequenceTextEdit->setPlaceholderText("Recorded sequence will be shown here...");
@@ -567,9 +566,17 @@ void ControllerApp::setupUI() {
     statusLabel->setWordWrap(true);
     layout->addWidget(statusLabel);
 
-    // Initialize animation for expanding/collapsing
-    animation = new QPropertyAnimation(sequenceTextEdit, "visible", this);
-    animation->setDuration(200);
+    // Initialize animation for expanding/collapsing sequence panel
+    sequencePanelAnimation = new QPropertyAnimation(sequenceTextEdit, "maximumHeight", this);
+    sequencePanelAnimation->setDuration(200);
+    connect(sequencePanelAnimation, &QPropertyAnimation::finished, this, [this]() {
+        if (!sequencePanelVisible && sequenceTextEdit) {
+            sequenceTextEdit->setVisible(false);
+            sequenceTextEdit->setMaximumHeight(0);
+        } else if (sequencePanelVisible && sequenceTextEdit) {
+            sequenceTextEdit->setMaximumHeight(sequencePanelExpandedHeight);
+        }
+    });
 
     // Add main content to root layout
     rootLayout->addWidget(mainContent);
@@ -1526,28 +1533,26 @@ void ControllerApp::recordKeyEvent(CGKeyCode keyCode, bool isPress) {
 
 // Add toggleSequencePanel method to show/hide sequence details
 void ControllerApp::toggleSequencePanel() {
+    if (!sequenceTextEdit || !sequencePanelAnimation) {
+        return;
+    }
+
+    sequencePanelVisible = !sequencePanelVisible;
+
+    sequencePanelAnimation->stop();
+    sequencePanelAnimation->setStartValue(sequenceTextEdit->maximumHeight());
+
     if (sequencePanelVisible) {
-        // Hide panel
-        sequenceTextEdit->setVisible(false);
-        expandButton->setText("▼ Show Sequence Details");
-        
-        // After hiding, resize the window to fit the now smaller content
-        adjustSize();
-    } else {
-        // Get current width before showing the panel
-        int currentWidth = width();
-        
-        // Show panel
         updateSequenceText();
         sequenceTextEdit->setVisible(true);
         expandButton->setText("▲ Hide Sequence Details");
-        
-        // After showing, resize the window vertically but maintain the same width
-        adjustSize();
-        resize(currentWidth, height());
+        sequencePanelAnimation->setEndValue(sequencePanelExpandedHeight);
+    } else {
+        expandButton->setText("▼ Show Sequence Details");
+        sequencePanelAnimation->setEndValue(0);
     }
-    
-    sequencePanelVisible = !sequencePanelVisible;
+
+    sequencePanelAnimation->start();
 }
 
 void ControllerApp::toggleNotesPanel() {
@@ -1723,6 +1728,10 @@ void ControllerApp::setAlwaysOnTop(bool enable) {
 #endif
 
     updateStatusLabel(enable ? "Status: Window will stay on top" : "Status: Window will behave normally");
+
+    if (settings) {
+        settings->setValue("alwaysOnTop", alwaysOnTop);
+    }
 
 #ifdef __APPLE__
     WId windowId = winId();

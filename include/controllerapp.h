@@ -125,8 +125,9 @@ private:
     // Sequence details panel
     QTextEdit* sequenceTextEdit = nullptr;
     QPushButton* expandButton = nullptr;
-    QPropertyAnimation* animation = nullptr;
+    QPropertyAnimation* sequencePanelAnimation = nullptr;
     bool sequencePanelVisible = false;
+    int sequencePanelExpandedHeight = 180;
 
     // Notes panel
     QPushButton* notesToggleButton = nullptr;
