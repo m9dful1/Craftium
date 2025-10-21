@@ -435,10 +435,8 @@ bool ControllerApp::event(QEvent* event) {
 #ifdef __APPLE__
     if (alwaysOnTop && !suppressFocusGuard && event && event->type() == QEvent::WindowActivate) {
         QTimer::singleShot(0, this, [this]() {
-            QWidget* focusWidget = QApplication::focusWidget();
-            bool internalFocus = focusWidget && focusWidget->window() == this;
-
-            if (!internalFocus && !QApplication::activeModalWidget() && !QApplication::activePopupWidget()) {
+            bool retainFocus = shouldRetainFocusDuringTopMode();
+            if (!retainFocus && !QApplication::activeModalWidget() && !QApplication::activePopupWidget()) {
                 craftiumDeactivateApp();
                 craftiumReactivateLastForegroundApp();
             }
@@ -661,7 +659,38 @@ QString ControllerApp::elideStatusText(const QString& text) const {
         message = savePrefix + filename;
     }
 
+    const QString seqLoadPrefix = "Status: Sequence loaded from ";
+    if (message.startsWith(seqLoadPrefix)) {
+        QString suffix = message.mid(seqLoadPrefix.length());
+        QString filename = QFileInfo(suffix).fileName();
+        message = seqLoadPrefix + filename;
+    }
+
+    const QString seqSavePrefix = "Status: Sequence saved to ";
+    if (message.startsWith(seqSavePrefix)) {
+        QString suffix = message.mid(seqSavePrefix.length());
+        QString filename = QFileInfo(suffix).fileName();
+        message = seqSavePrefix + filename;
+    }
+
     return message;
+}
+
+bool ControllerApp::shouldRetainFocusDuringTopMode() const {
+    QWidget* focusWidget = QApplication::focusWidget();
+    if (!focusWidget) {
+        return false;
+    }
+
+    if (focusWidget->window() != this) {
+        return false;
+    }
+
+    if (notesPanelVisible && notesTextEdit && focusWidget == notesTextEdit) {
+        return true;
+    }
+
+    return false;
 }
 
 void ControllerApp::clearSequence() {
@@ -1712,6 +1741,10 @@ void ControllerApp::saveNotesToFile() {
     file.close();
 
     updateStatusLabel("Status: Notes saved to " + fileName);
+
+    if (notesPanelVisible) {
+        notesTextEdit->setFocus(Qt::OtherFocusReason);
+    }
 }
 
 void ControllerApp::loadNotesFromFile() {
@@ -1746,6 +1779,10 @@ void ControllerApp::loadNotesFromFile() {
     file.close();
 
     updateStatusLabel("Status: Notes loaded from " + fileName);
+
+    if (notesPanelVisible) {
+        notesTextEdit->setFocus(Qt::OtherFocusReason);
+    }
 }
 
 void ControllerApp::setAlwaysOnTop(bool enable) {

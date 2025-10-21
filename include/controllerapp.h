@@ -92,6 +92,7 @@ private:
     QAction* findActionInMenu(const QList<QAction*>& menuActions, const QString& menuName, const QString& actionName);
     void updateStatusLabel(const QString& message);
     QString elideStatusText(const QString& text) const;
+    bool shouldRetainFocusDuringTopMode() const;
     bool event(QEvent* event) override;
 
 #ifdef _WIN32
