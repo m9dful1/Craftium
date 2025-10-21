@@ -396,9 +396,14 @@ ControllerApp::ControllerApp(QWidget *parent)
 #ifdef __APPLE__
     // Check Accessibility permissions at launch and show dialog if needed
     craftiumInstallFrontmostObserver();
-    QTimer::singleShot(500, this, [this]() {
+    bool launchPrompt = settings->value("shownAccessibilityWelcome", false).toBool();
+    if (!launchPrompt) {
         checkAndRequestAccessibilityPermissions();
-    });
+    } else {
+        QTimer::singleShot(500, this, [this]() {
+            checkAndRequestAccessibilityPermissions();
+        });
+    }
 #endif
 }
 
