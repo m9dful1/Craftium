@@ -14,7 +14,7 @@ Craftium is a powerful keyboard automation tool designed to record and replay ke
 - 💾 **Save & Load**: Save sequences as JSON files for later use
 - 🔄 **Repeat Playback**: Set custom repeat counts for sequences
 - 🎨 **Dark Mode**: Built-in dark theme for comfortable use
-- 📌 **Always on Top**: Enhanced window priority to stay visible over other applications
+- 📌 **Always on Top**: Enhanced window priority that defers focus back to the underlying app
 - 🖥️ **macOS Native**: Optimized for macOS with full system integration
 
 ## Use Cases
