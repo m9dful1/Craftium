@@ -1437,50 +1437,55 @@ void ControllerApp::checkAndRequestAccessibilityPermissions() {
     // are granted, because macOS ties permissions to the exact binary path.
     // We'll show a one-time informational message, but won't block the app.
 
-    // Check if we've already shown the welcome message
     bool shownWelcome = settings->value("shownAccessibilityWelcome", false).toBool();
+    bool hasPermissions = hasInputMonitoringPermission();
 
-    if (!shownWelcome) {
-        qDebug() << "First launch - showing Accessibility permissions info";
+    if (!shownWelcome || !hasPermissions) {
+        qDebug() << "Displaying permissions guidance";
 
-        // Show informational dialog explaining why permissions might be needed
+        const bool retrying = !hasPermissions;
+        QString title = retrying ? "Permissions Required" : "Welcome to Craftium!";
+        QString heading = retrying
+            ? "<h3>Craftium Needs macOS Permissions</h3>"
+            : "<h3>Welcome to Craftium!</h3>";
+        QString intro = retrying
+            ? "<p>macOS has not yet granted Craftium the <b>Accessibility</b> and <b>Input Monitoring</b> permissions it needs to record keystrokes.</p>"
+              "<p>Follow the steps below, then restart Craftium and click <b>Start Recording</b> to verify.</p>"
+            : "<p>To record keyboard sequences, Craftium needs <b>Accessibility</b> and <b>Input Monitoring</b> permissions.</p>";
+
         QMessageBox msgBox(this);
-        msgBox.setIcon(QMessageBox::Information);
-        msgBox.setWindowTitle("Welcome to Craftium!");
+        msgBox.setIcon(retrying ? QMessageBox::Warning : QMessageBox::Information);
+        msgBox.setWindowTitle(title);
         msgBox.setTextFormat(Qt::RichText);
         msgBox.setWindowFlag(Qt::WindowStaysOnTopHint, true);
-        msgBox.setText(
-            "<h3>Welcome to Craftium!</h3>"
-            "<p>To record keyboard sequences, Craftium needs <b>Accessibility</b> and "
-            "<b>Input Monitoring</b> permissions.</p>"
-        );
+        msgBox.setText(heading + intro);
         msgBox.setInformativeText(
-            "<p><b>If you haven't granted permissions yet:</b></p>"
+            "<p><b>Steps:</b></p>"
             "<ol style='margin-left: 20px;'>"
-            "<li>Click one of the buttons below to jump to the relevant settings pane.</li>"
-            "<li>Enable Craftium under <b>Accessibility</b> and <b>Input Monitoring</b>.</li>"
-            "<li>Restart Craftium, then click 'Start Recording' to test.</li>"
+            "<li>Move Craftium.app to your <b>Applications</b> folder if it is running from Downloads.</li>"
+            "<li>Open <b>System Settings → Privacy & Security</b>.</li>"
+            "<li>Enable Craftium under <b>Accessibility</b>.</li>"
+            "<li>Enable Craftium under <b>Input Monitoring</b>.</li>"
+            "<li>Quit and relaunch Craftium.</li>"
             "</ol>"
-            "<p><i>Note: This message will only appear once.</i></p>"
+            "<p>If Craftium does not appear, click the “+” button and add it from the Applications folder.</p>"
         );
 
         QPushButton* openAccessibilityBtn = msgBox.addButton("Open Accessibility", QMessageBox::ActionRole);
         QPushButton* openInputMonitoringBtn = msgBox.addButton("Open Input Monitoring", QMessageBox::ActionRole);
-        QPushButton* okBtn = msgBox.addButton("OK, Got It", QMessageBox::AcceptRole);
-        msgBox.setDefaultButton(okBtn);
+        msgBox.addButton(QMessageBox::Ok);
+        msgBox.setDefaultButton(openInputMonitoringBtn);
 
         msgBox.raise();
         msgBox.activateWindow();
         msgBox.exec();
 
         if (msgBox.clickedButton() == openAccessibilityBtn) {
-            // Open System Settings to Privacy & Security -> Accessibility
             QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"));
         } else if (msgBox.clickedButton() == openInputMonitoringBtn) {
             QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"));
         }
 
-        // Mark that we've shown the welcome message
         settings->setValue("shownAccessibilityWelcome", true);
     }
 
