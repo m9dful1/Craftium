@@ -367,9 +367,6 @@ ControllerApp::ControllerApp(QWidget *parent)
         }
     }
 
-    // Apply Always on Top at startup
-    setAlwaysOnTop(alwaysOnTop);
-
     // Setup worker thread
     playbackThread = new QThread(this);
     playbackWorker = new PlaybackWorker();
@@ -396,15 +393,11 @@ ControllerApp::ControllerApp(QWidget *parent)
 #ifdef __APPLE__
     // Check Accessibility permissions at launch and show dialog if needed
     craftiumInstallFrontmostObserver();
-    bool launchPrompt = settings->value("shownAccessibilityWelcome", false).toBool();
-    if (!launchPrompt) {
-        checkAndRequestAccessibilityPermissions();
-    } else {
-        QTimer::singleShot(500, this, [this]() {
-            checkAndRequestAccessibilityPermissions();
-        });
-    }
+    checkAndRequestAccessibilityPermissions();
 #endif
+
+    // Apply Always on Top after permission prompts so dialogs stay visible
+    setAlwaysOnTop(alwaysOnTop);
 }
 
 ControllerApp::~ControllerApp() {
@@ -1441,6 +1434,15 @@ void ControllerApp::checkAndRequestAccessibilityPermissions() {
     bool hasPermissions = hasInputMonitoringPermission();
 
     if (!shownWelcome || !hasPermissions) {
+        if (!hasPermissions) {
+            const void *keys[] = { kAXTrustedCheckOptionPrompt };
+            const void *values[] = { kCFBooleanTrue };
+            CFDictionaryRef options = CFDictionaryCreate(kCFAllocatorDefault, keys, values, std::size(keys),
+                                                         &kCFCopyStringDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+            AXIsProcessTrustedWithOptions(options);
+            CFRelease(options);
+        }
+
         qDebug() << "Displaying permissions guidance";
 
         const bool retrying = !hasPermissions;
