@@ -11,6 +11,7 @@
 #include <QPropertyAnimation>
 #include <QCheckBox>
 #include <QMenuBar>
+#include <QFrame>
 #include <string>
 #include <vector>
 #include <map>
@@ -65,6 +66,7 @@ public slots:
     void loadSequence();
     void clearSequence();
     void toggleSequencePanel();
+    void toggleNotesPanel();
     void updateSequenceText();
     void clearFocusFromControls();
     void setAlwaysOnTop(bool enable);
@@ -80,6 +82,8 @@ signals:
 
 private slots:
     void handlePlaybackFinished();
+    void saveNotesToFile();
+    void loadNotesFromFile();
 
 private:
     void setupUI();
@@ -123,6 +127,14 @@ private:
     QPushButton* expandButton = nullptr;
     QPropertyAnimation* animation = nullptr;
     bool sequencePanelVisible = false;
+
+    // Notes panel
+    QPushButton* notesToggleButton = nullptr;
+    QFrame* notesPanel = nullptr;
+    QTextEdit* notesTextEdit = nullptr;
+    QPropertyAnimation* notesPanelAnimation = nullptr;
+    bool notesPanelVisible = false;
+    int notesPanelExpandedWidth = 260;
 
     // Always on top control
     QCheckBox* alwaysOnTopCheckbox = nullptr;

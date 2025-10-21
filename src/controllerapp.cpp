@@ -28,6 +28,9 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QTextBrowser>
+#include <QTextStream>
+#include <QStandardPaths>
+#include <QDir>
 #include <QSignalBlocker>
 #include <QEvent>
 
@@ -450,18 +453,24 @@ bool ControllerApp::event(QEvent* event) {
 }
 
 void ControllerApp::setupUI() {
-    // Create main layout
-    QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(10, 10, 10, 10);
-    layout->setSpacing(5); // Increased overall spacing
-    layout->setSizeConstraint(QLayout::SetFixedSize); // Make the window size match contents exactly
-    
+    // Create root layout to host main content and optional side panels
+    QHBoxLayout* rootLayout = new QHBoxLayout(this);
+    rootLayout->setContentsMargins(10, 10, 10, 10);
+    rootLayout->setSpacing(5);
+    rootLayout->setSizeConstraint(QLayout::SetFixedSize);
+
+    QWidget* mainContent = new QWidget(this);
+    mainContent->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    QVBoxLayout* layout = new QVBoxLayout(mainContent);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(5);
+
     // Create and setup the menu bar
     setupMenuBar();
-    
+
     // Set window title
     setWindowTitle("Craftium - Auto Crafter");
-    
+
     // Create control buttons container widget
     QWidget* controlsWidget = new QWidget(this);
     controlsWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed); // Fixed size in both directions
@@ -528,7 +537,12 @@ void ControllerApp::setupUI() {
     expandButton = new QPushButton("▼ Show Sequence Details", this);
     connect(expandButton, &QPushButton::clicked, this, &ControllerApp::toggleSequencePanel);
     controlsLayout->addWidget(expandButton);
-    
+
+    // Add toggle button for notes panel
+    notesToggleButton = new QPushButton("▶ Notes", this);
+    connect(notesToggleButton, &QPushButton::clicked, this, &ControllerApp::toggleNotesPanel);
+    controlsLayout->addWidget(notesToggleButton);
+
     // Add the controls widget to the main layout
     layout->addWidget(controlsWidget);
     
@@ -552,11 +566,57 @@ void ControllerApp::setupUI() {
     statusLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     statusLabel->setWordWrap(true);
     layout->addWidget(statusLabel);
-    
+
     // Initialize animation for expanding/collapsing
     animation = new QPropertyAnimation(sequenceTextEdit, "visible", this);
     animation->setDuration(200);
-    
+
+    // Add main content to root layout
+    rootLayout->addWidget(mainContent);
+
+    // Notes panel (initially hidden)
+    notesPanel = new QFrame(this);
+    notesPanel->setVisible(false);
+    notesPanel->setMinimumWidth(0);
+    notesPanel->setMaximumWidth(0);
+    notesPanel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    notesPanel->setFrameShape(QFrame::StyledPanel);
+
+    QVBoxLayout* notesLayout = new QVBoxLayout(notesPanel);
+    notesLayout->setContentsMargins(10, 10, 10, 10);
+    notesLayout->setSpacing(8);
+
+    QLabel* notesHeader = new QLabel("Notes", notesPanel);
+    notesHeader->setAlignment(Qt::AlignCenter);
+    notesLayout->addWidget(notesHeader);
+
+    notesTextEdit = new QTextEdit(notesPanel);
+    notesTextEdit->setPlaceholderText("Capture notes, reminders, or a runbook for this automation...");
+    notesLayout->addWidget(notesTextEdit);
+
+    QHBoxLayout* notesButtonLayout = new QHBoxLayout();
+    notesButtonLayout->setSpacing(6);
+    QPushButton* loadNotesButton = new QPushButton("Load", notesPanel);
+    QPushButton* saveNotesButton = new QPushButton("Save", notesPanel);
+    notesButtonLayout->addWidget(loadNotesButton);
+    notesButtonLayout->addWidget(saveNotesButton);
+    notesLayout->addLayout(notesButtonLayout);
+
+    connect(loadNotesButton, &QPushButton::clicked, this, &ControllerApp::loadNotesFromFile);
+    connect(saveNotesButton, &QPushButton::clicked, this, &ControllerApp::saveNotesToFile);
+
+    notesPanelAnimation = new QPropertyAnimation(notesPanel, "maximumWidth", this);
+    notesPanelAnimation->setDuration(200);
+    connect(notesPanelAnimation, &QPropertyAnimation::finished, this, [this]() {
+        if (!notesPanelVisible && notesPanel) {
+            notesPanel->setVisible(false);
+        } else if (notesPanelVisible && notesPanel) {
+            notesPanel->setMaximumWidth(notesPanelExpandedWidth);
+        }
+    });
+
+    rootLayout->addWidget(notesPanel);
+
     // Let the size adjust to match the content width - will make the window narrower
     setMinimumWidth(0); // Remove minimum width constraint
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred); // Don't allow horizontal expansion
@@ -1376,6 +1436,7 @@ void ControllerApp::checkAndRequestAccessibilityPermissions() {
         msgBox.setIcon(QMessageBox::Information);
         msgBox.setWindowTitle("Welcome to Craftium!");
         msgBox.setTextFormat(Qt::RichText);
+        msgBox.setWindowFlag(Qt::WindowStaysOnTopHint, true);
         msgBox.setText(
             "<h3>Welcome to Craftium!</h3>"
             "<p>To record keyboard sequences, Craftium needs <b>Accessibility</b> and "
@@ -1396,16 +1457,12 @@ void ControllerApp::checkAndRequestAccessibilityPermissions() {
         QPushButton* okBtn = msgBox.addButton("OK, Got It", QMessageBox::AcceptRole);
         msgBox.setDefaultButton(okBtn);
 
+        msgBox.raise();
+        msgBox.activateWindow();
         msgBox.exec();
 
         if (msgBox.clickedButton() == openAccessibilityBtn) {
             // Open System Settings to Privacy & Security -> Accessibility
-            const void *keys[] = { kAXTrustedCheckOptionPrompt };
-            const void *values[] = { kCFBooleanTrue };
-            CFDictionaryRef options = CFDictionaryCreate(kCFAllocatorDefault, keys, values, std::size(keys),
-                                                         &kCFCopyStringDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-            AXIsProcessTrustedWithOptions(options);
-            CFRelease(options);
             QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"));
         } else if (msgBox.clickedButton() == openInputMonitoringBtn) {
             QDesktopServices::openUrl(QUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"));
@@ -1493,6 +1550,31 @@ void ControllerApp::toggleSequencePanel() {
     sequencePanelVisible = !sequencePanelVisible;
 }
 
+void ControllerApp::toggleNotesPanel() {
+    if (!notesPanel || !notesPanelAnimation || !notesToggleButton) {
+        return;
+    }
+
+    notesPanelVisible = !notesPanelVisible;
+
+    notesPanelAnimation->stop();
+    notesPanelAnimation->setStartValue(notesPanel->maximumWidth());
+
+    if (notesPanelVisible) {
+        notesToggleButton->setText("◀ Notes");
+        notesPanel->setVisible(true);
+        if (notesPanel->maximumWidth() == 0) {
+            notesPanel->setMaximumWidth(0);
+        }
+        notesPanelAnimation->setEndValue(notesPanelExpandedWidth);
+    } else {
+        notesToggleButton->setText("▶ Notes");
+        notesPanelAnimation->setEndValue(0);
+    }
+
+    notesPanelAnimation->start();
+}
+
 // Add updateSequenceText method to display sequence details
 void ControllerApp::updateSequenceText() {
     if (!sequenceTextEdit) return;
@@ -1550,6 +1632,71 @@ void ControllerApp::clearFocusFromControls() {
     this->setFocus();
     
     updateStatusLabel("Status: Focus cleared");
+}
+
+void ControllerApp::saveNotesToFile() {
+    if (!notesTextEdit) {
+        return;
+    }
+
+    QString basePath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    if (basePath.isEmpty()) {
+        basePath = QDir::homePath();
+    }
+
+    QString defaultFile = QDir(basePath).filePath("craftium-notes.txt");
+    QString fileName = QFileDialog::getSaveFileName(this,
+        "Save Notes", defaultFile,
+        "Text Files (*.txt);;Markdown Files (*.md);;All Files (*)");
+
+    if (fileName.isEmpty()) {
+        return;
+    }
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Save Notes",
+                             "Could not open file for writing: " + file.errorString());
+        return;
+    }
+
+    QTextStream out(&file);
+    out << notesTextEdit->toPlainText();
+    file.close();
+
+    updateStatusLabel("Status: Notes saved to " + fileName);
+}
+
+void ControllerApp::loadNotesFromFile() {
+    if (!notesTextEdit) {
+        return;
+    }
+
+    QString basePath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    if (basePath.isEmpty()) {
+        basePath = QDir::homePath();
+    }
+
+    QString fileName = QFileDialog::getOpenFileName(this,
+        "Load Notes", basePath,
+        "Text Files (*.txt *.md);;All Files (*)");
+
+    if (fileName.isEmpty()) {
+        return;
+    }
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Load Notes",
+                             "Could not open file for reading: " + file.errorString());
+        return;
+    }
+
+    QTextStream in(&file);
+    notesTextEdit->setPlainText(in.readAll());
+    file.close();
+
+    updateStatusLabel("Status: Notes loaded from " + fileName);
 }
 
 void ControllerApp::setAlwaysOnTop(bool enable) {
