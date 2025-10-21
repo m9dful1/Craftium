@@ -1,4 +1,4 @@
-# Craftium - Auto Crafter
+# Craftium - Keyboard Automation Tool
 
 ![Build Status](https://github.com/m9dful1/Craftium/workflows/Build%20Craftium/badge.svg)
 ![Continuous Build](https://github.com/m9dful1/Craftium/workflows/Continuous%20Build/badge.svg)
@@ -19,7 +19,7 @@ Craftium is a powerful keyboard automation tool designed to record and replay ke
 
 ## Use Cases
 
-Craftium is designed for legitimate productivity and automation tasks:
+Craftium is designed for productivity and automation tasks:
 
 - **Software Testing**: Automate repetitive QA test scenarios and regression testing
 - **Data Entry**: Speed up form filling and repetitive data input tasks

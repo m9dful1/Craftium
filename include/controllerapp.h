@@ -117,7 +117,6 @@ private:
     mutable QMutex sequenceMutex;  // Protects sequence vector from concurrent access
     std::chrono::high_resolution_clock::time_point lastEventTime;
 
-    int minimumContentWidth = 0;
 
     QThread* playbackThread = nullptr;
     PlaybackWorker* playbackWorker = nullptr;

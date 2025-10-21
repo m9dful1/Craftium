@@ -561,12 +561,11 @@ void ControllerApp::setupUI() {
     statusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     statusLabel->setContentsMargins(5, 2, 5, 2);
     statusLabel->setMinimumHeight(24);
-    statusLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    statusLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     statusLabel->setWordWrap(true);
     layout->addWidget(statusLabel);
 
     // Record initial width so status text can be elided accordingly
-    minimumContentWidth = controlsWidget->sizeHint().width();
 
     // Initialize animation for expanding/collapsing sequence panel
     sequencePanelAnimation = new QPropertyAnimation(sequenceTextEdit, "maximumHeight", this);
@@ -639,6 +638,7 @@ void ControllerApp::updateStatusLabel(const QString& message) {
     qDebug() << message;
 
     statusLabel->setText(elideStatusText(message));
+    statusLabel->setToolTip(message);
 }
 
 QString ControllerApp::elideStatusText(const QString& text) const {
@@ -661,13 +661,7 @@ QString ControllerApp::elideStatusText(const QString& text) const {
         message = savePrefix + filename;
     }
 
-    QFontMetrics metrics(statusLabel->font());
-    int availableWidth = statusLabel->width();
-    if (availableWidth <= 0) {
-        availableWidth = minimumContentWidth > 0 ? minimumContentWidth : 300;
-    }
-
-    return metrics.elidedText(message, Qt::ElideRight, availableWidth - 10);
+    return message;
 }
 
 void ControllerApp::clearSequence() {
