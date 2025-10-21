@@ -529,15 +529,15 @@ void ControllerApp::setupUI() {
     
     controlsLayout->addLayout(repeatLayout);
     
-    // Add expand/collapse button for sequence details
-    expandButton = new QPushButton("▼ Show Sequence Details", this);
-    connect(expandButton, &QPushButton::clicked, this, &ControllerApp::toggleSequencePanel);
-    controlsLayout->addWidget(expandButton);
-
     // Add toggle button for notes panel
     notesToggleButton = new QPushButton("▶ Notes", this);
     connect(notesToggleButton, &QPushButton::clicked, this, &ControllerApp::toggleNotesPanel);
     controlsLayout->addWidget(notesToggleButton);
+
+    // Add expand/collapse button for sequence details
+    expandButton = new QPushButton("▼ Show Sequence Details", this);
+    connect(expandButton, &QPushButton::clicked, this, &ControllerApp::toggleSequencePanel);
+    controlsLayout->addWidget(expandButton);
 
     // Add the controls widget to the main layout
     layout->addWidget(controlsWidget);
