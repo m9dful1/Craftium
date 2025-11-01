@@ -19,11 +19,15 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install signing certificate
-      if: ${{ secrets.MACOS_CERTIFICATE_BASE64 != '' && secrets.MACOS_CERTIFICATE_PWD != '' }}
       env:
         MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
         MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
       run: |
+        if [ -z "${MACOS_CERTIFICATE_BASE64:-}" ] || [ -z "${MACOS_CERTIFICATE_PWD:-}" ]; then
+          echo "Signing certificate secrets not provided. Skipping certificate installation."
+          exit 0
+        fi
+
         CERTIFICATE_PATH="$RUNNER_TEMP/apple_certificate.p12"
         KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
 
